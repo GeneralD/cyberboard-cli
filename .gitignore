@@ -1,0 +1,18 @@
+# ─────────────────────────────────────────────────────────────
+# Proprietary AngryMiao content — NEVER commit (copyright / DMCA).
+# Personal reverse-engineering for interop is one thing; redistributing
+# the vendor's app or its decompiled source publicly is another.
+# ─────────────────────────────────────────────────────────────
+AM_Master_mac_*.pkg
+AM_Master_mac_*_extracted/
+
+# Reverse-engineering artifacts live only on the local machine.
+# Ignore everything under _re/ ...
+/_re/*
+# ... except our own first-party tooling (analysis scripts we wrote).
+!/_re/verify_encoding.py
+!/_re/zscan.py
+
+# macOS
+.DS_Store
+**/.DS_Store
