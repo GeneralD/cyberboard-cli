@@ -1,6 +1,6 @@
 # cyberboard-cli
 
-![status](https://img.shields.io/badge/status-research%20%2F%20WIP-yellow) ![platform](https://img.shields.io/badge/platform-macOS-blue) ![target](https://img.shields.io/badge/target-CyberBoard%20R4-blue) ![protocol](https://img.shields.io/badge/protocol-reverse--engineered-purple) ![transport](https://img.shields.io/badge/transport-USB%20CDC%20serial-success)
+![status](https://img.shields.io/badge/status-research%20%2F%20WIP-yellow) ![platform](https://img.shields.io/badge/platform-macOS-blue) ![target](https://img.shields.io/badge/target-CyberBoard%20R4-blue) ![protocol](https://img.shields.io/badge/protocol-reverse--engineered-purple) ![transport](https://img.shields.io/badge/transport-USB%20CDC%20serial-success) ![license](https://img.shields.io/badge/license-MIT-green)
 
 A protocol knowledge base — and a planned CLI — for writing **AngryMiao
 CyberBoard R4** configuration **without the official AM Master app**.
