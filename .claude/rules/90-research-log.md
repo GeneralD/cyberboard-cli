@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-06-22 (続14) — 🎉 M3 build 達成: keymap.toml → IR(`cb_build.py`)+ ラウンドトリップ実証
+
+`build`(独自スキーマ TOML → 焼き込み用 JSON = 完全 IR)の本体を実装。**純粋 file→file**(デバイス I/O 無し)。
+①位置(`resolve_position`)+ ②値(`keycode`)が揃ったので残りの「TOML→layer_data override + 機能テーブル
+組立」を実装した。
+
+### `tools/cb_build.py`
+
+- **build**: `-k keymap.toml [-b base] -o config.json`。base IR を deep-copy → toml を差分適用:
+  - `[layer.1-7]`(1-indexed→配列 N−1): 位置(別名/座標)→idx、値(可読名/`#…`)→code、該当 idx を上書き。
+  - `[[swap_key]]`/`[[exchange_key]]`/`[[macro]]`/`[[fn_key]]`: 提示時は**当該テーブルを全置換**(`*_num`=実数)。
+    省略時は base 維持。**swap/exchange は write 送出、macro/fn は R 系列が送らない(§5)→ build が警告**。
+  - base 必須(`-b` or `[meta].base`)。`refresh_keymap_from_device` は build では非対応(pure step)。
+- **dump**(逆変換): `--dump config.json [--full]` で IR→keymap.toml。占有位置を別名/座標で出力 + 機能テーブル。
+  `--full` は全 200 位置(クリア `.` 含む)を出して base 非依存の厳密ラウンドトリップを可能に。
+
+### ラウンドトリップ実証(無損失の成立条件、`build(dump(C)) == C`)
+
+- **工場 config を `--full` dump → 別 base(merged)上で build → key_layer 1400/1400 完全一致**
+  - swap/macro/fn テーブルも再現。base 非依存で C を復元できた = スキーマ無損失が end-to-end で成立。
+- 現実的な小パッチ(caps→lctrl, esc→電源 passthrough, swap a↔b)でも: override が正しい idx に着弾 /
+  未指定位置は base 不変 / **LED(page_data)は base から継承**(=「keymap だけ変更・LED 維持」が build で成立)。
+- 出力 config は schema 検証 pass(`cb_verify`, jsonschema 完全検証も OK)。
+
+### 実データで判明した型の緩さ(忠実保持が必要)
+
+- TOML 配列テーブルは **1 行 1 キー**(spec 例の詰め書きは無効 → 修正)。
+- macro の `out` と `intvel_ms` は**長さ不一致を許容**(工場 macro idx2: out=2 / intvel=1)→ 等長強制を撤廃。
+- **placeholder エントリ**(全 `#00000000`)は工場 exchange に 7 件(num=0)→ dump で除外、`*_num`=実数で再計算。
+
+### 次
+
+- LED `led.toml` ソース合成(merger/miaomerge の replace/combine 相当を build に取込)。現状 LED は base 継承。
+- 実機での end-to-end(`build` → `cb_write --execute` → 目視/`[6,9]` 読戻し diff)。
+
+---
+
 ## 2026-06-22 (続13) — M3 着手: keymap.toml v1 設計確定 + R4 別名表を工場出荷 layer0 から生成
 
 keymap.toml v1 仕様を確定(`40` §独自スキーマ案、advisor レビュー反映)し、その内蔵テーブル②

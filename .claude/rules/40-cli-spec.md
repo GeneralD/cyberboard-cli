@@ -106,13 +106,28 @@ r3c0  = "lctrl"            # ↑ と等価(座標直書き)。大小無視なの
 caps  = "Fn2"              # 0x92 ラベルも値に書ける(機能でアンカー)
 esc   = "#00920A01"        # 生パススルー(未解読ベンダー=電源キー。名前無しでも無損失)
 
-[[swap_key]]   input = "a"  out = "b"
-[[exchange_key]] input = ["a","b"]  out = ["b","a"]
-[[macro]]      input = "m"  out = ["h","i"]  interval_ms = [0, 100]
-[[fn_key]]     input = "p"  out = "up"
+[[swap_key]]                # TOML 配列テーブルは 1 行 1 キー(詰め書き不可)
+input = "a"
+out   = "b"
+
+[[exchange_key]]
+input = ["a", "b"]
+out   = ["b", "a"]
+
+[[macro]]
+input       = "m"
+out         = ["h", "i"]
+interval_ms = [0, 100]
+
+[[fn_key]]
+input = "p"
+out   = "up"
 ```
 
 - swap/exchange/macro/fn_key の値も **②値の名前空間**(可読名 or `#…`)で書く。
+  **swap/exchange は R 系列 write が送る**が、**macro/fn_key は送らない**(`30` §5)→ IR には
+  入るが当面デバイスへ届かない(build が警告)。placeholder(全 `#00000000`)エントリは dump 時に
+  除外し、`*_num` は実エントリ数で再計算(工場 exchange=placeholder 7 件/num=0 を再現)。
 - 内蔵テーブル: 可読名 ↔ `#MMPPUUUU`(`10` / `decode_keymap.py` の HID07/HID0C + 0x92 ラベル)、
   別名 ↔ 座標(R4 プリセット。layer0 デコードから生成、最下段は要押し試験 🔴)。
 - **別名表 = 実装済み 🟢**(2026-06-22, `90` 続13): `presets/r4-keymap-aliases.json`(81 別名)+
@@ -210,11 +225,16 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
    `[6,9]` で 7 レイヤ dump / `--compare CFG` で diff。実機 1400/1400 一致。`90` 続3)。
    - **LED の読み戻し経路は未発見** 🔴 → LED は「書込んだ IR を正」とするか目視。
      残課題: LED read 変種の探索([4,*]/[5,*] や別カテゴリ、`Central.py` の HID 経路)。
-4. **M3**: 独自スキーマ → IR の `build`(keymap/LED 分離)。
+4. **M3**: 独自スキーマ → IR の `build`(keymap/LED 分離) — ✅ **keymap 達成**
+   (`tools/cb_build.py`, `90` 続14)。
    - **keymap.toml v1 仕様 確定**(2026-06-22, 本書 §独自スキーマ案)。base IR への差分パッチ /
      位置(座標 `r{row}c{col}` + R4 別名)と値(可読名 + 生 `#MMPPUUUU` passthrough)の 2 名前空間 /
-     1-indexed `[layer.1-7]` / 無損失=ラウンドトリップ検証可。**実装はこれから**。
-   - 必要な内蔵テーブル: 可読名↔`#MMPPUUUU`(`decode_keymap.py` 既存)+ R4 別名↔座標
-     (layer0 デコードから生成。最下段 row5 の物理対応は要押し試験 🔴)。
+     1-indexed `[layer.1-7]` / 無損失=ラウンドトリップ検証可。
+   - 内蔵テーブル: ②値 codec `tools/keycode.py`(可読名↔`#MMPPUUUU`)+ ①位置 `tools/keymap_alias.py`
+     (`presets/r4-keymap-aliases.json` 81 別名 ↔ 座標)。最下段 row5 の物理対応のみ要押し試験 🔴。
+   - **`cb_build.py`**: `-k keymap.toml [-b base] -o config.json`(build)/ `--dump config.json [--full]`
+     (IR→toml)。純粋 file→file。**ラウンドトリップ実証**: 工場 dump(--full)を別 base 上で build →
+     **key_layer 1400/1400 完全一致** + swap/macro/fn 再現(`build(dump(C)) == C`)。schema 検証 pass。
+   - 🔴 残: LED `led.toml` ソースからの合成(現状 LED は base から継承=「keymap だけ変更」は成立)。
 5. **M4**: 堅牢化(接続安定化)。部分書込は firmware 非対応(続8)のため不要 —
    分離管理は「read→merge→フル書込」で M3 build が吸収する。
