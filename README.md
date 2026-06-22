@@ -62,7 +62,7 @@ uv run --extra led cyberboard --help     # LED commands need --extra led; device
 | `doctor` | Non-destructive connectivity health check |
 | `build` | `keymap.toml` → IR config (`--dump` for the reverse) |
 | `verify` | Validate an IR config against the schema |
-| `led` | GIF ⇄ IR display codec (`gif2ir` / `ir2gif` / `recipe`) |
+| `led` | GIF ⇄ IR display codec + terminal player (`gif2ir` / `ir2gif` / `play` / `recipe`) |
 | `anim` | Render declarative LED animations (`render` / `preview`) |
 | `read` | Read config back from the device (`keymap`) |
 | `write` | Write an IR config to the device |
@@ -71,6 +71,7 @@ uv run --extra led cyberboard --help     # LED commands need --extra led; device
 ```sh
 cyberboard devices                                              # find your board
 cyberboard anim preview -r examples/led/text-scroll.json -o preview.gif   # author an LED animation
+cyberboard led play -i preview.gif                              # play it right in the terminal (Ctrl-C to stop)
 cyberboard build -k keymap.toml -b base.json -o config.json     # build a config from a TOML keymap
 cyberboard write config.json --execute                          # write it (omit --execute for a dry run)
 ```
@@ -176,7 +177,8 @@ Done:
 - **M2 — Read-back + diff** ✅ for the keymap (write → read → 1400/1400 match).
   LED has no read-back path, so it's authored from source.
 - **M3 — Keymap build** ✅ `keymap.toml` → IR with lossless round-trip.
-- **M5 — LED display authoring** ✅ GIF ⇄ IR codec + declarative animation recipes.
+- **M5 — LED display authoring** ✅ GIF ⇄ IR codec + declarative animation recipes
+  - an in-terminal player (`led play`, half-block truecolor).
 
 Productization (in progress): a unified `cyberboard` CLI core (done), standalone
 packaging (this), then an MCP server and a Claude plugin that all call the same

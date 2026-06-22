@@ -7,6 +7,8 @@
 
     cb_led.py gif2ir -i art.gif -b base.json --slot 1 -o config.json   # GIF -> IR slot
     cb_led.py ir2gif -i config.json --slot 1 -o art.gif [--recipe ...] # IR slot -> GIF
+    cb_led.py play   -i art.gif [--loop N | --once] [--scale 2]        # play in the terminal
+    cb_led.py play   -i config.json --slot 1                           # play an IR slot
     cb_led.py recipe  art.gif [--set "..."]                            # GIF comment R/W
 
 The display panel is a 40x5 grid; each frame is 200 `#RRGGBB` strings in row-major
@@ -27,12 +29,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 W, H = 40, 5
 PIXELS = W * H  # 200
 MAX_FRAMES = 256  # firmware playback cap per slot (90 续5)
+
+ESC = "\x1b"
+RESET = f"{ESC}[0m"
+UPPER_HALF = "▀"  # U+2580: fg paints the top pixel, bg the bottom pixel
 
 
 def _warn(msg: str) -> None:
@@ -208,6 +216,109 @@ def recipe(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- terminal playback (half-block ▀) -------------------------------------------
+
+def _halfblock_lines(frame: list[str], scale: int) -> list[str]:
+    """Render one 200-px frame as 3 ANSI lines of upper-half-blocks.
+
+    Two pixel rows share one text line: the foreground colors the top pixel and
+    the background the bottom (U+2580 fills the upper half). Row 4 (the 5th,
+    unpaired) leaves its lower half as the terminal's default bg. `scale` repeats
+    each pixel horizontally (a cell is 1px wide x 2px tall, so widening helps it
+    read closer to square).
+    """
+    px = [_hex_px(s) for s in frame]
+    lines: list[str] = []
+    for top in (0, 2, 4):
+        bot = top + 1
+        cells = []
+        for x in range(W):
+            tr, tg, tb = px[top * W + x]
+            if bot < H:
+                br, bgc, bb = px[bot * W + x]
+                cells.append(f"{ESC}[38;2;{tr};{tg};{tb};48;2;{br};{bgc};{bb}m{UPPER_HALF * scale}")
+            else:
+                cells.append(f"{ESC}[38;2;{tr};{tg};{tb};49m{UPPER_HALF * scale}")
+        lines.append("".join(cells) + RESET)
+    return lines
+
+
+def _play_frames(rendered: list[list[str]], delay: float, passes: int) -> None:
+    """Animate pre-rendered frames in place on a TTY. `passes` 0 means forever."""
+    out = sys.stdout
+    height = len(rendered[0])  # grid text lines (3)
+    out.write(f"{ESC}[?25l")  # hide cursor
+    try:
+        first = True
+        count = 0
+        while passes == 0 or count < passes:
+            for lines in rendered:
+                if not first:
+                    out.write(f"{ESC}[{height}A")  # back to the top of the grid
+                out.write("\r" + "\n".join(lines) + "\n")
+                out.flush()
+                first = False
+                time.sleep(delay)
+            count += 1
+    except KeyboardInterrupt:
+        pass  # Ctrl-C is the documented way to stop playback — exit the loop quietly
+    finally:
+        out.write(f"{ESC}[?25h")  # restore the cursor whatever happened
+        out.flush()
+
+
+def play(args: argparse.Namespace) -> int:
+    if args.scale < 1:
+        raise SystemExit("cb_led: --scale must be >= 1")
+    if args.fps is not None and args.fps <= 0:
+        raise SystemExit("cb_led: --fps must be > 0")
+
+    if args.slot is not None:
+        config = json.loads(Path(args.input).read_text())
+        page_index = _slot_to_page(args.slot)
+        page = _page(config, page_index)
+        fd = page.get("frames", {}).get("frame_data", [])
+        if not fd:
+            raise SystemExit(f"cb_led: page {page_index} has no display frames")
+        frames = [fr["frame_RGB"] for fr in fd]
+        default_ms = page.get("speed_ms", 100)
+        src = f"slot {args.slot} (page {page_index}) of {Path(args.input).name}"
+    else:
+        frames, gif_ms = _gif_frames(Path(args.input), args.resample)
+        default_ms = gif_ms or 100
+        src = Path(args.input).name
+
+    bad = next((i for i, f in enumerate(frames) if len(f) != PIXELS), None)
+    if bad is not None:
+        raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
+    if len(frames) > MAX_FRAMES:
+        _warn(f"{len(frames)} frames; firmware plays only {MAX_FRAMES}/slot "
+              f"— showing the first {MAX_FRAMES} (90 续5)")
+        frames = frames[:MAX_FRAMES]
+
+    ms = (1000.0 / args.fps) if args.fps else (
+        args.speed_ms if args.speed_ms is not None else default_ms)
+    delay = max(ms, 1.0) / 1000.0
+    passes = 1 if args.once else (args.loop if args.loop else 0)
+    rendered = [_halfblock_lines(f, args.scale) for f in frames]
+
+    if not sys.stdout.isatty():
+        # piped / redirected: no animation, just one static frame
+        print("\n".join(rendered[0]))
+        _warn("stdout is not a TTY — printed a single static frame (no animation)")
+        return 0
+    if os.environ.get("COLORTERM", "").lower() not in ("truecolor", "24bit"):
+        _warn("COLORTERM is not 'truecolor' — the terminal may approximate colors")
+    if len(rendered) == 1:
+        print("\n".join(rendered[0]))  # a single-frame config is a static image
+        return 0
+
+    print(f"cb_led: playing {src} — {len(frames)} frames @ {1000.0 / max(ms, 1.0):.1f} fps "
+          f"({'∞' if passes == 0 else passes} pass{'' if passes == 1 else 'es'}); Ctrl-C to stop")
+    _play_frames(rendered, delay, passes)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="GIF <-> IR display-layer (40x5) codec")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -238,6 +349,25 @@ def main() -> int:
     rec.add_argument("input", help="GIF file")
     rec.add_argument("--set", help="set the recipe text (default: print it)")
     rec.set_defaults(func=recipe)
+
+    ply = sub.add_parser("play", help="play a GIF or IR slot in the terminal (half-block ▀)")
+    ply.add_argument("-i", "--input", required=True,
+                     help="animated GIF, or IR config JSON (with --slot)")
+    ply.add_argument("--slot", type=int,
+                     help="treat input as an IR config and play this slot (1/2/3)")
+    ply.add_argument("--scale", type=int, default=1,
+                     help="repeat each pixel horizontally (default 1)")
+    ply.add_argument("--fps", type=float,
+                     help="frames per second (overrides --speed-ms / GIF duration)")
+    ply.add_argument("--speed-ms", type=int, dest="speed_ms",
+                     help="ms per frame (overrides the IR/GIF default)")
+    ply.add_argument("--resample", choices=("nearest", "lanczos", "box"), default="nearest",
+                     help="GIF downscale filter to 40x5 (default nearest)")
+    loop_grp = ply.add_mutually_exclusive_group()
+    loop_grp.add_argument("--once", action="store_true", help="play a single pass then stop")
+    loop_grp.add_argument("--loop", type=int, metavar="N",
+                          help="play N passes then stop (default: loop forever)")
+    ply.set_defaults(func=play)
 
     args = ap.parse_args()
     return args.func(args)
