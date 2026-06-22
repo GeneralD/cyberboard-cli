@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-06-23 (続21) — 製品化 #4: MCP サーバ(`cyberboard-mcp`、CLI を subprocess で wrap)
+
+issue #4。CLI の操作を MCP tool として公開。**CLI がコア**の方針通り、各 tool は
+`python -m cyberboard.cli …` を subprocess で叩いて結果を返す(= MCP 面が CLI 挙動から乖離しない)。
+
+### SDK の確定(実測で context7 の誤誘導を回避)🟢
+
++ context7 は最新 main の `mcp.server.mcpserver.MCPServer` を提示したが、**pip 安定版には存在しない**
+  (`uv run --with mcp` で実測 → `ModuleNotFoundError`)。リリース版は `from mcp.server.fastmcp import
+  FastMCP`(`.tool` decorator + `.run()` あり)。→ **`FastMCP` を採用**。bleeding-edge 名を鵜呑みにせず実測。
+
+### 実装(`cyberboard/mcp_server.py`)
+
++ `_run(args)` = `subprocess.run([sys.executable,"-m","cyberboard.cli",*args], capture_output=True)` →
+  `{ok, exit_code, stdout, stderr}`。`_run_json` は `--json` 系の stdout をパースして構造化。
++ **11 tool**: list_devices / device_info / doctor / verify / build_keymap / render_animation /
+  preview_animation / gif_to_ir / ir_to_gif / read_keymap / **write_config**(破壊的=既定 dry-run、
+  `execute=True` で実書込)。LED 系は同 env の `[led]` extra が要る(無ければ CLI の clean hint が stderr に出る)。
++ モジュール名は `mcp_server.py`(`mcp.py` だと SDK の `import mcp` を shadow するため回避)。SDK 未導入時は
+  import 段で `SystemExit("… pip install 'cyberboard-cli[mcp]'")`。
++ pyproject: extra `mcp = ["mcp>=1.2"]`(+ `all` に追加)、console script `cyberboard-mcp = cyberboard.mcp_server:main`。
+
+### 検証 🟢
+
++ `uv run --with mcp`: **11 tool 登録**を確認 / `list_devices()` が**実機 R4 を JSON 構造化**で返す
+  (`{port, product_id:CB04, …}`)/ `verify(bad)`=ok:False exit:1 / `doctor()`=exit:0 ok:True / `main` callable。
++ find-debug クリーン。README に **MCP server** セクション(install `[mcp]` / `cyberboard-mcp` / client config 例 / tool 一覧)。
+
+### 次
+
++ #3 plugin(`.claude-plugin/plugin.json` + marketplace、MCP `cyberboard-mcp` 同梱 + user-facing skill)→
+  #2 cyberboard-led を plugin skill 化 → #6 sprite + LED design agent。
+
 ## 2026-06-23 (続20) — 製品化 #8: 単体配布をクリーン環境で実証 + README に Install/Usage
 
 issue #5(PR #9)で pyproject まで入ったので、issue #8 の残作業は**実証 + ドキュメント**に縮小。受け入れ条件

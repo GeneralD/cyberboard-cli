@@ -75,6 +75,28 @@ cyberboard build -k keymap.toml -b base.json -o config.json     # build a config
 cyberboard write config.json --execute                          # write it (omit --execute for a dry run)
 ```
 
+## MCP server
+
+The same operations are available to MCP clients (Claude, editors, agents) via a
+stdio server that wraps the CLI — so the MCP surface never drifts from the CLI.
+
+```sh
+pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp] @ git+https://github.com/GeneralD/cyberboard-cli'
+cyberboard-mcp                       # serves over stdio
+```
+
+Point a client at the `cyberboard-mcp` command (stdio). Example client config:
+
+```json
+{ "mcpServers": { "cyberboard": { "command": "cyberboard-mcp" } } }
+```
+
+Tools: `list_devices` · `device_info` · `doctor` · `verify` · `build_keymap` ·
+`render_animation` · `preview_animation` · `gif_to_ir` · `ir_to_gif` ·
+`read_keymap` · `write_config`. `write_config` is destructive and defaults to a
+dry run (pass `execute=true` to actually write). LED tools need the `[led]`
+extra in the same environment.
+
 ## Why
 
 The official setup has three problems this project fixes:
