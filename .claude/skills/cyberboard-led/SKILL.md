@@ -147,8 +147,8 @@ uv run tools/cb_write.py config.json --execute    # ONLY after the user confirms
 
 LED frames cannot be read back. Ask the user to switch the display to the Custom
 LED slot and **look** — does it match the preview? If not, iterate from step 2.
-(The keymap, if it was part of the write, *can* be verified: `cb_read.py
---compare config.json`, after a ~2s settle, `90` 续8.)
+(The keymap, if it was part of the write, *can* be verified:
+`cb_read.py keymap --compare config.json`, after a ~2s settle, `90` 续8.)
 
 ## Notes
 
@@ -157,5 +157,6 @@ LED slot and **look** — does it match the preview? If not, iterate from step 2
   logic down into `tools/*.py`, not into the prose here.
 - Background and protocol detail: `.claude/rules/40-cli-spec.md` (LED authoring
   section) and `10`/`30`. Effect catalog: `examples/led/README.md`.
-- Device detection/safety is the sibling [`cyberboard-device`] skill — run it
-  first if you're unsure the right board is connected.
+- Device detection/safety is the sibling `cyberboard-device` skill
+  (`.claude/skills/cyberboard-device/SKILL.md`) — run it first if you're unsure
+  the right board is connected.
