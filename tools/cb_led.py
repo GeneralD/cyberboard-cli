@@ -56,6 +56,60 @@ def _hex_px(s: str) -> tuple[int, int, int]:
     return tuple(int(s[i:i + 2], 16) for i in (1, 3, 5))  # type: ignore[return-value]
 
 
+# --- shared frame transforms (reused by gif2ir/ir2gif and cb_anim) ---------------
+
+def frames_to_page(base: dict, slot: int, frames: list[list[str]],
+                   speed_ms: int | None = None, lightness: int | None = None) -> dict:
+    """Patch `frames` (list of 200 `#RRGGBB`) into the display layer of a base IR.
+
+    Caps at MAX_FRAMES (firmware playback limit, 90 续5) and keeps the page's
+    per-key `keyframes` untouched. The single source of truth for the GIF path
+    (gif2ir) and the recipe path (cb_anim) alike. Returns the patched page.
+    """
+    page_index = _slot_to_page(slot)
+    page = _page(base, page_index)
+    bad = next((i for i, f in enumerate(frames) if len(f) != PIXELS), None)
+    if bad is not None:
+        raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
+    if len(frames) > MAX_FRAMES:
+        _warn(f"{len(frames)} frames; firmware plays only {MAX_FRAMES}/slot "
+              f"— dropping {len(frames) - MAX_FRAMES} (90 续5)")
+        frames = frames[:MAX_FRAMES]
+    page["frames"] = {
+        "valid": 1,
+        "frame_num": len(frames),
+        "frame_data": [{"frame_index": i, "frame_RGB": f} for i, f in enumerate(frames)],
+    }
+    page["valid"] = True
+    if speed_ms is not None:
+        page["speed_ms"] = speed_ms
+    if lightness is not None:
+        page["lightness"] = lightness
+    return page
+
+
+def frames_to_gif(frames: list[list[str]], output: str, scale: int = 16,
+                  duration: int = 100, recipe: str | None = None, loop: int = 0) -> int:
+    """Write `frames` (list of 200 `#RRGGBB`) as a scaled, looping animated GIF."""
+    from PIL import Image
+
+    if not frames:
+        raise SystemExit("cb_led: no frames to write")
+    imgs: list[Image.Image] = []
+    for k, f in enumerate(frames):
+        if len(f) != PIXELS:
+            raise SystemExit(f"cb_led: frame {k} has {len(f)} px, expected {PIXELS}")
+        img = Image.new("RGB", (W, H))
+        img.putdata([_hex_px(s) for s in f])
+        imgs.append(img.resize((W * scale, H * scale), Image.Resampling.NEAREST))
+    save_kw: dict = dict(save_all=True, append_images=imgs[1:], duration=duration,
+                         loop=loop, disposal=2)
+    if recipe:
+        save_kw["comment"] = recipe.encode("utf-8")
+    imgs[0].save(output, **save_kw)
+    return len(imgs)
+
+
 # --- GIF -> IR -------------------------------------------------------------------
 
 def _gif_frames(path: Path, resample: str) -> tuple[list[list[str]], int | None]:
@@ -82,31 +136,15 @@ def _gif_frames(path: Path, resample: str) -> tuple[list[list[str]], int | None]
 
 def gif2ir(args: argparse.Namespace) -> int:
     base = json.loads(Path(args.base).read_text())
-    page_index = _slot_to_page(args.slot)
-    page = _page(base, page_index)
-
     frames, gif_ms = _gif_frames(Path(args.input), args.resample)
-    if len(frames) > MAX_FRAMES:
-        _warn(f"GIF has {len(frames)} frames; firmware plays only {MAX_FRAMES}/slot "
-              f"— dropping {len(frames) - MAX_FRAMES} (90 续5)")
-        frames = frames[:MAX_FRAMES]
-
-    page["frames"] = {
-        "valid": 1,
-        "frame_num": len(frames),
-        "frame_data": [{"frame_index": i, "frame_RGB": f} for i, f in enumerate(frames)],
-    }
-    page["valid"] = True
     speed = args.speed_ms if args.speed_ms is not None else gif_ms
-    if speed is not None:
-        page["speed_ms"] = speed
-    if args.lightness is not None:
-        page["lightness"] = args.lightness
+    page = frames_to_page(base, args.slot, frames, speed, args.lightness)
+    page_index = page["page_index"]
 
     Path(args.output).write_text(json.dumps(base, ensure_ascii=False, indent=2))
     note = f", speed_ms={page['speed_ms']}" if speed is not None else ""
-    print(f"cb_led: slot {args.slot} (page {page_index}) <- {len(frames)} display frames"
-          f"{note}; keyframes kept from base -> {args.output}")
+    print(f"cb_led: slot {args.slot} (page {page_index}) <- {page['frames']['frame_num']} "
+          f"display frames{note}; keyframes kept from base -> {args.output}")
     from PIL import Image  # report embedded recipe, if any
     comment = Image.open(args.input).info.get("comment")
     if comment:
@@ -118,8 +156,6 @@ def gif2ir(args: argparse.Namespace) -> int:
 # --- IR -> GIF -------------------------------------------------------------------
 
 def ir2gif(args: argparse.Namespace) -> int:
-    from PIL import Image
-
     config = json.loads(Path(args.input).read_text())
     page_index = _slot_to_page(args.slot)
     page = _page(config, page_index)
@@ -127,26 +163,12 @@ def ir2gif(args: argparse.Namespace) -> int:
     if not fd:
         raise SystemExit(f"cb_led: page {page_index} has no display frames")
 
-    scale = args.scale
-    imgs: list[Image.Image] = []
-    for fr in fd:
-        rgb = fr["frame_RGB"]
-        if len(rgb) != PIXELS:
-            raise SystemExit(f"cb_led: frame {fr.get('frame_index')} has {len(rgb)} px, "
-                             f"expected {PIXELS}")
-        img = Image.new("RGB", (W, H))
-        img.putdata([_hex_px(s) for s in rgb])
-        imgs.append(img.resize((W * scale, H * scale), Image.Resampling.NEAREST))
-
+    frames = [fr["frame_RGB"] for fr in fd]
     duration = args.speed_ms if args.speed_ms is not None else page.get("speed_ms", 100)
-    save_kw: dict = dict(save_all=True, append_images=imgs[1:], duration=duration,
-                         loop=0, disposal=2)
-    if args.recipe:
-        save_kw["comment"] = args.recipe.encode("utf-8")
-    imgs[0].save(args.output, **save_kw)
+    n = frames_to_gif(frames, args.output, args.scale, duration, args.recipe)
     rec = " + recipe" if args.recipe else ""
-    print(f"cb_led: slot {args.slot} (page {page_index}) -> {len(imgs)} frames "
-          f"@ {W * scale}x{H * scale}, {duration}ms/frame{rec} -> {args.output}")
+    print(f"cb_led: slot {args.slot} (page {page_index}) -> {n} frames "
+          f"@ {W * args.scale}x{H * args.scale}, {duration}ms/frame{rec} -> {args.output}")
     return 0
 
 
