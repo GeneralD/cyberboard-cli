@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-06-23 (続19) — 製品化 #5: CLI コア統一(`cyberboard` 単一エントリ + pyproject)
+
+POC→PR フローの最初の PR(`feat/5-cli-core`)。バラバラの `tools/cb_*.py` を**単一の
+`cyberboard <command>` に統一**し、pure Python・**マルチハーネス**(MCP/skill はこのコアを叩く)
+の土台を作る。issue #5。
+
+### 設計(`cyberboard/cli.py` = 薄いディスパッチャ)
+
++ tools/ を `sys.path` に載せ、要求された command の module だけ **lazy import** → `sys.argv`
+  を差し替えて `mod.main()` を呼ぶ。各ツールの挙動は不変(移動・改変なし=低マージリスク)。
++ lazy ゆえ **optional 依存の欠落が綺麗なメッセージで出る**(pyserial=device I/O / pillow=LED)。
++ command 表: `devices`/`device`/`doctor`/`build`/`verify`/`led`/`anim`/`read`/`write`/`set-time`。
+  `devices`=`cb_device list` のように prepend で吸収。`-h`/`--version` あり。
++ Claude/MCP 固有を**一切持たない**(= マルチハーネスの核。MCP #4・skill #2 はここを呼ぶだけ)。
+
+### パッケージ化(pyproject.toml, hatchling)
+
++ `[project.scripts] cyberboard = "cyberboard.cli:main"`。deps=**pyserial(core)**、extras=
+  `led`(pillow)/`verify`(jsonschema)/`all`。`requires-python>=3.11`(tomllib 使用)。
++ wheel は `cyberboard` パッケージ + **force-include `tools`→`cyberboard/_tools`** で cb_* を同梱。
+  ディスパッチャは **repo の `../tools` を優先、無ければ `cyberboard/_tools`** を見る → editable と
+  wheel の両方で動く。
++ **レビュー High(`uv run tools/cb_*.py` が pyserial 落ち)を根治**: pyproject 存在で `uv run` が
+  project を build し core 依存を入れる。LED 系は `uv run --extra led cyberboard anim …`。
+
+### 検証 🟢
+
++ `python -m cyberboard.cli` で help/`--version`/unknown(rc=2)、`anim preview`(pillow lazy)、
+  `led --help`(prog=`cyberboard led`)、`devices` が**実機 R4 `CB04` を検出**。
++ `uv run --extra led cyberboard …`(entry point)も OK。`uv build --wheel` で cb_* が
+  `cyberboard/_tools/` に入ることを確認。
+
+### 次
+
++ #8 配布整備(uv/pip ドキュメント・PyPI メタ・pipx)→ #4 MCP(コア wrap)→ #3 plugin →
+  #2 cyberboard-led を plugin skill として再構築(CLI コア呼び出し)→ #6 sprite + LED design agent。
+
 ## 2026-06-23 (続18) — M5 続: 模様回転=marquee を手続き系で実装(hue_cycle / stripes / gradient_scroll)
 
 3原型のうち第2の手続き系(advisor 順序:text → pattern → sprite)。8:1 アスペクトで幾何回転は破綻
