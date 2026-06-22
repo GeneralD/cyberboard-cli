@@ -206,6 +206,24 @@ serial.Serial(com_json, baudrate=9600, timeout=10, write_timeout=1)
    ブロックしうる。`cu.usbmodem*` を使うべき。これが「接続できない」体感の有力因。
 6. **ポート取り違え**: ドングル(`CB_DONGLE_1`/`AM_DONGLE_1`)を掴むと `check_dongle` が
    `com_json=None` にする。複数 AM デバイス併用時に誤選択。
+7. **`pages_num` 書込ゲート(中古/初期化前の個体が書けない元凶)** 🟢(`90` 続9):
+   `json_download` は書込前に `cmd_check_pages [2,6]` で **device の `pages_num` を読み**、
+   その値で分岐する。**唯一デバイスから読む値はこの「ページ数」だけ**(config 内容は読まない)。
+
+   ```python
+   if pages_num == 0:    # 空/初期化前の個体
+       if sign(STATUELI)==0:
+           if len(f_li)==6: json_sender()
+           else: emit(404); "请从官网下载完整版json"  # ← 書込拒否
+       else: json_sender()  # 旧式モード
+   elif pages_num == 3:  json_sender()   # 通常 R4(実機実測=3)
+   # else 無し → pages_num が 0/3 以外なら json_sender() が呼ばれず黙って no-op
+   ```
+
+   → **中古個体が `pages_num≠3`(おそらく 0)を返す** → 404 拒否 or silent no-op = **「いきなり書けない」**。
+   **初期化で完全 config を入れ `pages_num=3` になると書けるようになる**(ユーザー実体験と一致)。
+   これは**クライアント側の過保護な前提チェック**であって firmware ロックではない(推論🟡: その個体の
+   pages_num 未実測。症状とコードは完全一致)。**我々のツールはこのゲートを持たない=回避できる**(`40`)。
 
 ### CLI 側の堅牢化方針 🟢(設計)
 

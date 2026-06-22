@@ -4,6 +4,44 @@
 
 ---
 
+## 2026-06-22 (続9) — 公式の書込ゲート = `pages_num`(中古個体が書けない元凶を特定)
+
+ユーザー談「メルカリ中古は**いきなり書けず**、初期化したら書けた。キーボード状態が公式アプリの
+キャッシュと不整合?」を逆コンパイルで検証。**仮説の直感(デバイス状態が書込を阻む)は正しいが、
+機構は「キャッシュ内容の同期」ではない**。
+
+### 確定事実 🟢(`_re/dc3/KBSerialOption.py` json_download)
+
+- 公式が**デバイスから読む唯一の値は `pages_num`**(`cmd_check_pages [2,6]`)。**config の中身は
+  読み戻さない**(`get_*` は全デッドコード=続8 で確認済み)。= 「読んでマージ」ではなく
+  **ファイル(`global_info.json_path`)を正にしたクライアント側マージ + 全置換書込**。
+- 書込ゲート(原典):
+
+  ```python
+  if pages_num == 0:
+      if sign(STATUELI)==0:
+          if len(f_li)==6: json_sender()
+          else: emit(404); "请从官网下载完整版json"   # ← 書込拒否
+      else: json_sender()                              # 旧式モード
+  elif pages_num == 3: json_sender()                   # 通常 R4(実機実測=3)
+  # else 無し → pages_num が 0/3 以外なら json_sender() 不呼出 = 黙って no-op
+  ```
+
+- **中古個体の説明**: `pages_num≠3`(おそらく空で 0)を返す → 404 拒否 or silent no-op =
+  **「いきなり書けない」**。**初期化で完全 config 投入 → `pages_num=3` → 書ける**(症状と一致)。
+  これは**クライアント側の過保護な前提チェック**で firmware ロックではない(推論🟡: その個体の
+  pages_num 未実測。コードと症状は完全一致)。
+
+### 我々のツールへの含意(優位)🟢
+
+- `cb_write.py` は**この `pages_num` ゲートを持たない** → `JSON_START`→フル config→`JSON_END` を
+  無条件送出。**公式が「中古だから」と拒否する個体でも書きにいける**(pages_num=0 個体での実証は未、
+  構造上は回避)。`30 §6-7` / `40` 反映済み。
+- device pages_num=3 vs file page_num=8 の食い違い: check_pages は「カスタム/有効ページ数」
+  (slots 5/6/7=3?)等の firmware 内部カウントの可能性。空個体で 0 になる仮説と整合。要実測🔴。
+
+---
+
 ## 2026-06-22 (続8) — 🎯 部分書き込みは非対応(JSON_START が全消去)+ read-back settle 遅延
 
 B2(主目的直結): 「LED だけ送れば keymap は残る?」を実機検証。read-back の非対称性
