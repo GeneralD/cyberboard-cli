@@ -162,10 +162,42 @@ cb_led.py recipe  art.gif [--set "…"]                             # GIF コメ
 - **256 cap**: firmware は 1 slot 256 フレームまで再生(`90` 続5)→ 超過分は drop して警告
   (silent cap 禁止)。任意サイズ GIF は 40×5 へ自動ダウンサンプル(`--resample nearest|box|lanczos`、
   既定 nearest=ドット絵向き)。`speed_ms` は GIF の duration から(or `--speed-ms`)。
-- **ラウンドトリップ実証 🟢**: merged slot1 → `ir2gif` → `gif2ir`(別 base 上)→ **display
-  13200/13200 px 完全一致**、keyframes 維持、recipe 往復 OK、出力は schema 検証 pass。
+- **ラウンドトリップ**: `ir2gif` → `gif2ir`。**低色数アニメは可逆**(全フレーム横断 ≤256 色なら
+  GIF パレットに収まる)、keyframes 維持・recipe 往復・schema pass。⚠ **リッチ色(>256 色/横断)は
+  GIF グローバルパレットで色が削られ、連続同一フレームは Pillow が coalesce する**(`90` 続17)→
+  ir2gif は**ビューア**であって、リッチ素材の可逆フォーマットは IR JSON 自体。
 - **同じ物理マップが双方向**(描画↔サンプル)に使える(`experiments/perkey-layout/render_tui.py`
   が TUI/PNG で実証)。display は 1:1 マップ既知なので今すぐ可。per-key も同型だが index マップ待ち。
+
+### LED: 宣言的レシピでアニメ生成(`cb_anim.py` 🟢 実装済み)
+
+GIF を「取り込む」だけでなく、**宣言的レシピから 40×5 アニメを生成**する(`90` 続17)。
+コミュニティ作品の3原型(テキスト横スクロール / キャラ縦スクロール / 模様回転)のうち、
+**手続き的に書けるもの(text/pattern)はパラメータだけで生成**でき、AI/作者はノブを選ぶだけ
+(ホワイトリスト式エフェクト=生コードは走らない)。**スプライト的なもの(キャラ)だけ**
+後段のデザインエージェント+vision ループの価値が出る(advisor 指摘:3原型は対等でない)。
+
+```text
+cb_anim.py render  -r recipe.json -b base.json -o config.json [--gif art.gif]  # レシピ→IR(+GIF)
+cb_anim.py preview -r recipe.json -o art.gif [--scale 16]                       # レシピ→GIF のみ(高速)
+```
+
+- **共有変換**: cb_anim はフレーム列(200-hex)を生成し、cb_led の `frames_to_page`
+  (display `frames` へ patch・per-key 維持・256 cap)/ `frames_to_gif` を呼ぶ。**コーデックは
+  cb_led に一本化**(gif2ir/ir2gif と同じ経路 → IR 構築ロジックが二重化しない)。
+- **出力は IR が正**(書込対象)。GIF は共有/プレビュー用で recipe JSON を Comment に同梱。
+  我々の生成物は色数が少ない(text=2色等、全フレーム横断 ≤256 色)ので GIF も可逆
+  (cb_anim text の `ir2gif→gif2ir` で 18000/18000 実証)。**リッチ色アニメ(>256 色/横断)は
+  GIF パレットで色が削られ可逆でない**(`90` 続17 で訂正)→ 書込対象は IR を直接吐く。
+- **レシピ書式**(単一エフェクト or `sequence` で連結):
+  - `text_scroll`(手続き的): `text` / `fg` / `bg` / `step`(px/frame) / `spacing` / `gap` /
+    `direction`。**`gap:0`=継ぎ目なしトーラスタイリング**(`HELLOHELLO…`)、`gap:40`=画面外まで
+    流れて再入。フォントは **tom-thumb(5px, MIT, vendored `tools/fonts/`)**。40×5 で legibility 実描画確認済。
+  - `solid`(単色を N フレーム保持): `color` / `frames`。区切り・連結の間に使う。
+- **ユーザー要望の4ノブが揃う** 🟢(`90` 続17): ①継ぎ目なしループ=`gap:0`(seamless 実証:
+  wrap フレームが 1px ずつ連続シフト、段差ゼロ)/ ②長さ=`step`(text)・`frames`(solid)/
+  ③MAX256=生成時に警告して truncate(firmware 真値)/ ④短いの連結=`sequence`(merger `combine` 同型)。
+- 例: `examples/led/{text-scroll,sequence}.json`。
 
 ### LED `led.toml`(将来: 複数ソース合成のマニフェスト)
 
@@ -269,8 +301,14 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
      page 5/6/7。**ラウンドトリップ実証**: merged slot1 → ir2gif → gif2ir(別 base)→ **display
      13200/13200 px 一致** + keyframes 維持 + recipe 往復 + schema pass。256 cap(超過 drop 警告)、
      任意サイズ GIF は 40×5 ダウンサンプル、speed_ms は GIF duration 由来。
+   - **宣言的レシピ生成 達成**(`tools/cb_anim.py`, `90` 続17): レシピ→40×5 アニメを決定論的に
+     展開し cb_led 共有変換で IR/GIF 出力。`text_scroll`(手続き的、tom-thumb 5px フォント)+
+     `solid`。`render`(→IR+GIF)/ `preview`(→GIF のみ)。**4 ノブ実証**: ①継ぎ目なしループ
+     (`gap:0` seamless)/ ②長さ(`step`/`frames`)/ ③MAX256(警告+truncate)/ ④連結(`sequence`)。
+     cb_led を `frames_to_page`/`frames_to_gif` にリファクタしコーデック一本化。例 `examples/led/`。
    - **per-key(keyframes)GIF は未対応** 🔴: web 抽出の物理配置はあるが(`experiments/perkey-layout/`
      83 LED + `render_tui.py`)、**web-index ↔ keyframes-90 の対応が未確定**(export 相関パス要)。
      display は 1:1 マップ既知なので今すぐ可、per-key だけがこのマップ待ち。
-   - 🔴 残: `led.toml` マニフェスト(複数ソース合成)/ LED デザイン agent(生成→render→vision で
-     目視→批評→改訂ループ)/ TUI エディタ。
+   - 🔴 残: **キャラ縦スクロール(スプライト)エフェクト + LED デザイン agent**(生成→render→vision で
+     目視→批評→改訂ループ。3原型のうちスプライト系のみ agent の価値が出る)/ 模様回転(pattern marquee)
+     エフェクト / `led.toml` マニフェスト(複数ソース合成)/ TUI エディタ。

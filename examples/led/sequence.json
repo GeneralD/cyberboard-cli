@@ -1,0 +1,9 @@
+{
+  "slot": 1,
+  "speed_ms": 80,
+  "sequence": [
+    { "effect": "text_scroll", "text": "HELLO", "fg": "#00ff88", "gap": 40 },
+    { "effect": "solid", "color": "#220000", "frames": 6 },
+    { "effect": "text_scroll", "text": "WORLD", "fg": "#ff3366", "gap": 40 }
+  ]
+}

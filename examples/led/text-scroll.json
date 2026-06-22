@@ -1,0 +1,8 @@
+{
+  "slot": 1,
+  "speed_ms": 70,
+  "effect": "text_scroll",
+  "text": "AM CYBERBOARD R4  ",
+  "fg": "#00ff88",
+  "bg": "#000000"
+}
