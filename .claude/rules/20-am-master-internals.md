@@ -39,7 +39,7 @@
 | `HidDevice.py` | **HID(オーディオ/TWS/EQ 用)** + デバイス検出。⚠ キーボード設定はここを通らない |
 | `Comm.py` | **シリアル IAP ファーム更新(MediaTek系)**。CRC-16/X-25。⚠ 設定書き込みとは別 |
 | `Central.py` | TWS/オーディオ制御・ファーム更新オーケストレーション |
-| `ImageFile.py` | 画像 → LED フレーム変換(推定) |
+| `ImageFile.py` | **ファーム hex/bin イメージ parser**(`T_ImageFile`/`T_SubSeg` Address/Data, `HexStringToList` = IAP 用)。🔴訂正(`90` 続15): 旧「画像→LED 変換(推定)」は誤り、**LED と無関係**。→ per-key 座標マップは Python に無く web UI 側 |
 | `Music_set1.py` / `Add_audioq` / `ADD_FQ` | オーディオ/EQ 機能(別製品系) |
 
 > **トランスポートの整理**(重要): キーボード設定 = **`KBSerialOption` の

@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-06-22 (続15) — per-key LED を「物理配置 GIF からサンプル」案 + ImageFile.py の正体訂正
+
+ユーザー案: display(40×5)同様に **per-key 灯(`keyframes` 90個)も「キーボード物理配置を模した GIF に描き、
+各キーの座標のピクセルをサンプル」**して作れないか(QMK/VIA のレイアウト塗りと同型。per-key RGB authoring の理想)。
+
+### 確認できた事実
+
+- **能動ページ(5/6/7)の per-key keyframes は 90px**(display は 200px)。工場 config で確認。
+- **前提条件 = per-key index(0-89)→ 物理(x,y)マップが必要**。だが **per-key 90 ≠ keymap 物理キー 81**
+  (続10)で、**90 要素の並び順は未デコード🔴**。display は 1:1(`index=row*25+col`)で既知だが per-key は別系統。
+- **`ImageFile.pyc` をデコンパイル(`_re/pycdc`)→ 正体は「ファーム hex/bin イメージ parser」**
+  (`T_ImageFile`/`T_SubSeg` Address/Data, `HexStringToList`=IAP)。**rules の「画像→LED 変換(推定)」は誤り**
+  (`20` 訂正済み)。= **per-key 座標マップは Python に無い**。抽出済み web 資産(`_re/keycode_*.json`)にも無い。
+- → **per-key 座標マップは web UI(per-key 灯エディタ)にある**。ユーザーの Playwright 案が正しいルート。
+
+### 取得方針(次)
+
+- **Playwright で <https://diy.angrymiao.com/keyboard/> の per-key/PCB 灯エディタ**を開き、(a) 各キー要素の
+  座標 + index を DOM/SVG/Vue data から読む、または (b) **既知パターンを塗って JSON export → keyframes 配列の
+  どの index が変わったかで index↔物理を相関**(export 順=配列 index 順なので最も曖昧さが無い)。公開サイト=
+  プライバシー問題なし。これで 90 要素の index→(x,y) を確定 → per-key も GIF authoring 可能になる。
+- 代替: 実機で index 毎に 1 灯ずつ点灯→撮影(tedious、device+目視要)。web UI が優位。
+- display(40×5)は 1:1 マップ既知なので **GIF authoring は今すぐ可**(per-key だけがこのマップ待ち)。
+
+---
+
 ## 2026-06-22 (続14) — 🎉 M3 build 達成: keymap.toml → IR(`cb_build.py`)+ ラウンドトリップ実証
 
 `build`(独自スキーマ TOML → 焼き込み用 JSON = 完全 IR)の本体を実装。**純粋 file→file**(デバイス I/O 無し)。
