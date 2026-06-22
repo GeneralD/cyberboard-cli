@@ -16,8 +16,19 @@ UX layers live elsewhere.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
+
+# Optional dependencies some commands pull in (a few only lazily, inside a
+# function — e.g. cb_led imports PIL when it actually renders). A missing one
+# is translated into a clean install hint instead of a traceback, but only
+# when the package is genuinely absent: a ModuleNotFoundError naming one of
+# these while it IS installed signals an internal import bug and must surface.
+_OPTIONAL_DEPS = {
+    "serial": "device I/O needs pyserial:  pip install cyberboard-cli",
+    "PIL": "LED rendering needs pillow:    pip install 'cyberboard-cli[led]'",
+}
 
 # The cb_* modules sit in ../tools in the repo (editable install), or in
 # cyberboard/_tools when shipped in a wheel (force-included by pyproject).
@@ -44,6 +55,21 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "write": ("cb_write", [], "write an IR config to the device"),
     "set-time": ("cb_settime", [], "set the device RTC clock"),
 }
+
+
+def _optional_dep_hint(cmd: str, exc: ModuleNotFoundError) -> int | None:
+    """Clean message + exit code for a missing optional dep, else None.
+
+    Returns None (so the caller re-raises) for any other import error, and
+    also when the named package is actually installed — meaning the failure
+    is an internal sub-import bug we must not hide behind a "missing dep".
+    """
+    name = (exc.name or "").split(".")[0]
+    hint = _OPTIONAL_DEPS.get(name)
+    if hint is None or importlib.util.find_spec(name) is not None:
+        return None
+    print(f"cyberboard {cmd}: missing dependency {name!r}.\n  {hint}", file=sys.stderr)
+    return 1
 
 
 def _version() -> str:
@@ -100,23 +126,26 @@ def main(argv: list[str] | None = None) -> int:
     module, prepend, _ = entry
     if str(_TOOLS) not in sys.path:
         sys.path.insert(0, str(_TOOLS))
+
+    # A missing optional dep can surface either here (deps imported at module
+    # top, e.g. pyserial in cb_device) or later inside main() (deps imported
+    # lazily in a function, e.g. PIL in cb_led's render helpers) — handle both.
     try:
         mod = importlib.import_module(module)
     except ModuleNotFoundError as exc:
-        # A missing optional dependency lands here (pyserial for device I/O,
-        # pillow for LED rendering). Surface it without a traceback.
-        print(
-            f"cyberboard {cmd}: missing dependency {exc.name!r}.\n"
-            f"  device I/O needs pyserial:  pip install cyberboard-cli\n"
-            f"  LED rendering needs pillow: pip install 'cyberboard-cli[led]'",
-            file=sys.stderr,
-        )
-        return 1
+        rc = _optional_dep_hint(cmd, exc)
+        if rc is None:
+            raise
+        return rc
 
     saved = sys.argv
     sys.argv = [f"cyberboard {cmd}", *prepend, *rest]
     try:
         rc = mod.main()
+    except ModuleNotFoundError as exc:
+        rc = _optional_dep_hint(cmd, exc)
+        if rc is None:
+            raise
     finally:
         sys.argv = saved
     return rc if isinstance(rc, int) else 0
