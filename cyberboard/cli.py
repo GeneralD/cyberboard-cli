@@ -23,9 +23,13 @@ from pathlib import Path
 # cyberboard/_tools when shipped in a wheel (force-included by pyproject).
 # Adding that dir to sys.path lets us import them and lets their own
 # intra-imports (`import cb_protocol`, `import cb_led`, ...) resolve as-is.
-_REPO_TOOLS = Path(__file__).resolve().parent.parent / "tools"
+# Prefer the bundled copy when present (a wheel install): it is the
+# authoritative location and avoids picking up an unrelated site-packages
+# top-level `tools/`. In the repo (editable / source), _tools does not
+# exist, so we fall back to ../tools.
 _PKG_TOOLS = Path(__file__).resolve().parent / "_tools"
-_TOOLS = _REPO_TOOLS if _REPO_TOOLS.is_dir() else _PKG_TOOLS
+_REPO_TOOLS = Path(__file__).resolve().parent.parent / "tools"
+_TOOLS = _PKG_TOOLS if _PKG_TOOLS.is_dir() else _REPO_TOOLS
 
 # command -> (module, prepended argv, one-line help). Order is display order.
 COMMANDS: dict[str, tuple[str, list[str], str]] = {
