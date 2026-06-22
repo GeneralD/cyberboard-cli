@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-06-23 (続19) — 🔄 POC 終了 → issue/PR フロー移行 + 製品化ロードマップ起票 + 対話スキル `cyberboard-led`
+
+ユーザー指示「全部段階的にやるが、そろそろ POC 段階が終わる頃なので…計画していることを起票して
+PR 形式で進めていく」。+ 「ディスプレイ作成をスキル化 → リポを claude plugin / CLI / MCP 対応」
+
++ 「AskUserQuestion で対話的に作れると良い」。
+
+### プロセス移行
+
++ **POC 分(〜commit 8bb6465)を main へ push = PR の baseline**。以降の新規作業は feature ブランチ → PR。
+  research/POC の main 直 commit モードは終了。memory に記録([[cyberboard-pr-workflow]])。
+
+### 製品化ロードマップ(epic #1 + 子5件 起票)
+
++ レイヤ分離の核: **AskUserQuestion は Claude Code 専用 → 対話性はスキル層に閉じ込め、CLI/MCP は
+  決定論の素(render/build/write)だけ公開**。skill・MCP・手動 CLI が同じ素を共有。
++ #2 対話 LED スキル `cyberboard-led`(まず着手)/ #5 CLI 統一(単一 entry)/ #4 MCP サーバ /
+  #3 plugin 化(`.claude-plugin` + marketplace)/ #6 スプライト+デザイン agent。
++ issue body は mojiemoji 装飾(専門 agent で一括)。⚠ **mojiemoji フックは `--body-file` の中身を
+  読めず**コマンド文字列だけ走査 → タイトル日本語で発火し誤検知。装飾は実適用済みなので正規 bypass
+  (`MOJIEMOJI_HOOK_DISABLED=1`)で投稿(中身は規約充足)。
+
+### #2 cyberboard-led スキル(この PR)
+
++ `.claude/skills/cyberboard-led/SKILL.md`: cb_anim/cb_led を**対話駆動するメインループ skill**
+  (fork しない)。slot/効果/色/速度/継ぎ目を AskUserQuestion で収集 → preview を SendUserFile で
+  見せ反復 → base 用意 → render → verify → 確認して `cb_write --execute` → 実機目視。
++ **gotcha を skill に内蔵**: slot=page5-7 / 256 cap / **JSON_START 全消去ゆえ完全 base 必須**
+  (LED だけ patch 不可、per-key keyframes は base 維持)/ LED read-back 不可=目視確認 / 書込は
+  outward-facing=毎回確認。`cyberboard-device` を frontmatter テンプレに。
+
+### 次
+
++ #2 を PR レビュー → マージ後に #5 CLI 統一 → #4 MCP → #3 plugin、#6 スプライトは独立に。
+
+---
+
 ## 2026-06-23 (続18) — M5 続: 模様回転=marquee を手続き系で実装(hue_cycle / stripes / gradient_scroll)
 
 3原型のうち第2の手続き系(advisor 順序:text → pattern → sprite)。8:1 アスペクトで幾何回転は破綻

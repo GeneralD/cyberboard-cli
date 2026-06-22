@@ -194,10 +194,16 @@ cb_anim.py preview -r recipe.json -o art.gif [--scale 16]                       
     `direction`。**`gap:0`=継ぎ目なしトーラスタイリング**(`HELLOHELLO…`)、`gap:40`=画面外まで
     流れて再入。フォントは **tom-thumb(5px, MIT, vendored `tools/fonts/`)**。40×5 で legibility 実描画確認済。
   - `solid`(単色を N フレーム保持): `color` / `frames`。区切り・連結の間に使う。
+  - **模様回転=marquee 系**(`90` 続18): `hue_cycle`(虹サイクル、`spread` で全面明滅↔幅いっぱい虹)/
+    `stripes`(色帯スライド、`slant` で斜め)/ `gradient_scroll`(閉ループグラデ横流し)。全て**循環構造=
+    継ぎ目なし by construction**。8:1 アスペクトで幾何回転は破綻 → marquee 化(advisor 解釈)。
 - **ユーザー要望の4ノブが揃う** 🟢(`90` 続17): ①継ぎ目なしループ=`gap:0`(seamless 実証:
   wrap フレームが 1px ずつ連続シフト、段差ゼロ)/ ②長さ=`step`(text)・`frames`(solid)/
   ③MAX256=生成時に警告して truncate(firmware 真値)/ ④短いの連結=`sequence`(merger `combine` 同型)。
-- 例: `examples/led/{text-scroll,sequence}.json`。
+- 例: `examples/led/{text-scroll,sequence,pattern-hue,pattern-stripes,pattern-gradient}.json`。
+- **対話的オーサリング = skill [`cyberboard-led`](../skills/cyberboard-led/SKILL.md)**(`90` 続19,
+  issue #2): cb_anim/cb_led を AskUserQuestion で対話駆動 → preview を見せて反復 → 確認して書込。
+  対話性はスキル層に閉じ込め、CLI/MCP は決定論の素だけ公開(製品化ロードマップ epic #1)。
 
 ### LED `led.toml`(将来: 複数ソース合成のマニフェスト)
 
