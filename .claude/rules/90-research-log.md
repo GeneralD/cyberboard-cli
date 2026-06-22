@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-06-22 (続16) — 🎉 M5: GIF↔IR(display)コーデック `cb_led.py` + per-key 物理配置の web 抽出
+
+LED オーサリングの第一レンガ。**display(40×5)を GIF と相互変換**し、コミュニティ JSON 継ぎ接ぎの
+代わりに **5×40 ドット絵 GIF を作る/共有する**主軸を確立(`90` 続15 のアイデア確定 → 実装)。
+
+### `tools/cb_led.py`(純粋 file→file、Pillow 依存)
+
+- `gif2ir -i art.gif -b base.json --slot N -o config.json`: GIF の各フレームを 40×5 に
+  ダウンサンプル(`--resample nearest|box|lanczos`、既定 nearest=ドット絵向き)→ display
+  `frames`(200px, `index=y*40+x`)へ。**slot 1/2/3 = page_index 5/6/7**。base は完全 IR 必須
+  (JSON_START 全消去)。**per-key `keyframes` は base から維持**(index マップ未解明ゆえ触らない)。
+  `speed_ms` は GIF duration 由来(or `--speed-ms`)。GIF に埋まったレシピも表示。
+- `ir2gif -i config.json --slot N -o art.gif [--recipe …]`: IR の display フレームを 40×5×scale
+  (既定 ×16=640×80)のアニメ GIF に。目視確認用。`--recipe` で GIF Comment にプロンプト同梱。
+- `recipe art.gif [--set …]`: GIF Comment Extension の R/W(GIF に EXIF は無いので Comment が
+  レシピ格納先)。
+- **256 cap** 🟢: firmware 再生上限 256/slot(続5)→ 超過フレームは drop して警告(silent cap 禁止)。
+
+### ラウンドトリップ実証 🟢
+
+- merged slot1(page5, 66 フレーム)→ `ir2gif` → `gif2ir`(**別 base 上**)→ **display
+  13200/13200 px 完全一致**、keyframes(42)維持、recipe 往復一致、出力は `cb_verify` schema pass。
+- 任意サイズ GIF(320×40)→ 40×5 ダウンサンプル OK。300 フレーム GIF → 256 に cap + 警告を確認。
+- = **同じ 40×5 マップが双方向(描画↔サンプル)に使える**(続15 の TUI/PNG 実証 = `render_tui.py` を
+  コーデック化したもの)。display は 1:1 マップ既知なので**今すぐ可**。
+
+### per-key は index マップ待ち(open item)🔴
+
+- `experiments/perkey-layout/r4-perkey-layout.json`: web UI(`diy.angrymiao.com/in-switch-led`、
+  Vue `styles[]` の DOM `.led`)から **83 個の in-switch LED 物理座標 {i,x,y,w}** を Playwright 抽出。
+  ジオメトリは確実だが、**web-index(84)↔ device keyframes-index(0-89)の対応が未確定**(続15)。
+  export 相関パス(既知パターンを焼く/エクスポート順で相関)が要る。
+- `experiments/perkey-layout/render_tui.py`: truecolor ANSI + PNG レンダラ。per-key=物理配置、
+  display=40×5 1:1。同マップが双方向に使えることの実証。
+- → **per-key GIF オーサリングは index マップ確定後**。display の GIF コーデックは独立に完成。
+
+### 次
+
+- LED デザイン agent(prompt→GIF 生成→`ir2gif` で render→vision で目視→批評→改訂ループ)。
+- `led.toml` マニフェスト(slot ごとに GIF/JSON/merger 資産を合成。miaomerge `merge_configurations.rs` 参照)。
+- per-key の web-index↔keyframes-90 相関(open item)。実機 end-to-end(build→cb_led→cb_write→目視)。
+
+---
+
 ## 2026-06-22 (続15) — per-key LED を「物理配置 GIF からサンプル」案 + ImageFile.py の正体訂正
 
 ユーザー案: display(40×5)同様に **per-key 灯(`keyframes` 90個)も「キーボード物理配置を模した GIF に描き、

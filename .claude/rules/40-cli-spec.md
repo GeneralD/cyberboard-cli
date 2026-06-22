@@ -143,23 +143,48 @@ out   = "up"
 既に実証済みの「write→read→diff 1400/1400」(M2)を**1 段上へ持ち上げた検証**になる。
 → スキーマ設計時点でこのラウンドトリップを成立条件にする(= 生パススルーが必須になる根拠)。
 
-### LED `led.toml`(例)
+### LED: GIF を交換フォーマットにする(`cb_led.py` 🟢 実装済み)
+
+**display(40×5)は GIF と相互変換する**。コミュニティ JSON を継ぎ接ぎする代わりに、
+**5×40 ドット絵アニメ GIF を作る/共有する**のを主軸にする(`90` 続15 のアイデア確定)。
+GIF は人間も AI も直接扱え、目視確認も容易。生成レシピ/プロンプトは **GIF Comment
+Extension** に同梱(GIF に EXIF は無い)→ 設定そのものが再現可能なソースになる。
+
+```text
+cb_led.py gif2ir -i art.gif -b base.json --slot 1 -o config.json  # GIF → IR(slot へ patch)
+cb_led.py ir2gif -i config.json --slot 1 -o art.gif [--recipe …]  # IR slot → GIF(目視確認)
+cb_led.py recipe  art.gif [--set "…"]                             # GIF コメント R/W
+```
+
+- **slot 1/2/3 = page_index 5/6/7**。display フレーム = 200px(`index = y*40 + x` row-major)。
+- **gif2ir は display `frames` だけ patch**し、**per-key `keyframes` は base から維持**
+  (GIF↔keyframes-90 の index マップ未解明, `90` 続15)。base は完全 IR 必須(JSON_START 全消去)。
+- **256 cap**: firmware は 1 slot 256 フレームまで再生(`90` 続5)→ 超過分は drop して警告
+  (silent cap 禁止)。任意サイズ GIF は 40×5 へ自動ダウンサンプル(`--resample nearest|box|lanczos`、
+  既定 nearest=ドット絵向き)。`speed_ms` は GIF の duration から(or `--speed-ms`)。
+- **ラウンドトリップ実証 🟢**: merged slot1 → `ir2gif` → `gif2ir`(別 base 上)→ **display
+  13200/13200 px 完全一致**、keyframes 維持、recipe 往復 OK、出力は schema 検証 pass。
+- **同じ物理マップが双方向**(描画↔サンプル)に使える(`experiments/perkey-layout/render_tui.py`
+  が TUI/PNG で実証)。display は 1:1 マップ既知なので今すぐ可。per-key も同型だが index マップ待ち。
+
+### LED `led.toml`(将来: 複数ソース合成のマニフェスト)
+
+GIF 単体を超えて「複数ソースを slot ごとに合成」したくなったら toml マニフェストを被せる:
 
 ```toml
 # スロット = page 5/6/7(Custom LED 1/2/3)
 [[slot]]
 index = 1                # スロット1 (= page 5)
-source = "nyan_cat.json" # 既存JSON/merger資産から該当ページを取り込み
+source = "nyan_cat.gif"  # GIF(cb_led で取り込み)/ 既存 JSON ページ / merger 資産
 lightness = 100
 speed_ms = 34
 
 [[slot]]
 index = 2
-source = "matrix.json"
-# あるいは画像/GIF からフレーム生成(ImageFile.py 相当を将来実装)
+source = "matrix.json"   # 既存 JSON の Custom LED ページ
 ```
 
-- スロットのソースは「既存 JSON の Custom LED ページ」または将来「画像/GIF/自作フレーム」。
+- スロットのソースは「GIF」「既存 JSON の Custom LED ページ」「merger 資産」のいずれか。
 - merger のアニメ合成(連結・差し替え)機能はここに取り込む候補。
   - **参照実装**: `miaomerge`(merger の Tauri/Rust 版)の `merge_configurations.rs`。
     アクション `keep`/`replace`(置換)/`combine`(連結+`frame_num`再計算)。型付きで読みやすい。
@@ -238,3 +263,14 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
    - 🔴 残: LED `led.toml` ソースからの合成(現状 LED は base から継承=「keymap だけ変更」は成立)。
 5. **M4**: 堅牢化(接続安定化)。部分書込は firmware 非対応(続8)のため不要 —
    分離管理は「read→merge→フル書込」で M3 build が吸収する。
+6. **M5**: LED オーサリング — ✅ **GIF↔IR コーデック達成**(`tools/cb_led.py`, `90` 続16)。
+   - **`cb_led.py`**: `gif2ir`(GIF→IR slot patch)/ `ir2gif`(IR slot→GIF 目視確認)/
+     `recipe`(GIF Comment R/W)。純粋 file→file。display 200px(`index=y*40+x`)、slot 1/2/3=
+     page 5/6/7。**ラウンドトリップ実証**: merged slot1 → ir2gif → gif2ir(別 base)→ **display
+     13200/13200 px 一致** + keyframes 維持 + recipe 往復 + schema pass。256 cap(超過 drop 警告)、
+     任意サイズ GIF は 40×5 ダウンサンプル、speed_ms は GIF duration 由来。
+   - **per-key(keyframes)GIF は未対応** 🔴: web 抽出の物理配置はあるが(`experiments/perkey-layout/`
+     83 LED + `render_tui.py`)、**web-index ↔ keyframes-90 の対応が未確定**(export 相関パス要)。
+     display は 1:1 マップ既知なので今すぐ可、per-key だけがこのマップ待ち。
+   - 🔴 残: `led.toml` マニフェスト(複数ソース合成)/ LED デザイン agent(生成→render→vision で
+     目視→批評→改訂ループ)/ TUI エディタ。
