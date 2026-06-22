@@ -40,10 +40,13 @@ JSON の構造。**1 ファイルにキーマップと LED 表示が同居して
 
 - **`PP` = HID Usage Page**。実データで出現 🟢(`90` 続10): `0x07`=Keyboard/Keypad /
   `0x0C`=Consumer(メディア。`0xB6`=Prev, `0xCD`=Play/Pause, `0xE9`=Vol+…) /
-  `0x92`=**AM ベンダー独自機能**(公式 web JS から全解読 🟢 `90` 続11):`0x0Cxx`=レイヤー/Fn
-  (`0C0B`=KEY_FN, `0C0F-0C15`=layer1-7 永続, `0C20-0C26`=layerN momentary=fnN)、`0x01xx`=LED/接続
-  (on-off, 明るさ±, 速度±, 次ページ, BT1-3, 2.4G)、`0x09xx`=ローカル灯効モード、`0x0Axx`=電源/factory_reset。
-  詳細表は `experiments/keymap-matrix/`(生表は `_re/` ローカル)。
+  `0x92`=**AM ベンダー独自機能**(公式 web JS の UI 表示ラベル表から解読 🟢 `90` 続11-12):
+  `0x0Cxx`=レイヤー/Fn(`0C0F-0C15`=**Layer1-7 永続**、`0C20`/**`0C0B`**/`0C22-0C26`=**Fn1-7 momentary**
+  ※Fn2 だけ変則 `0C0B`、`0C0D/0C0E/0C1A-0C1F`=LFn/RFn 系)、`0x01xx`=ディスプレイ LED(on-off/明るさ±/
+  速度±/次/回転/BT1-3/2.4G)、`0x09xx`=PCB(per-key 灯)モード+NP ゾーン、`0x0Axx`=Reset/Battery。
+  詳細表は `experiments/keymap-matrix/`(生表 `_re/keycode_labels.json` ローカル)。
+  ⚠ Esc + 下段特定キーの**電源 ON コンボ**等、firmware ハードワイヤの**移動不可キーはブラックボックス扱い**
+  (詳細解明せず)。CLI は 0x92 を**解釈せず passthrough**(保存・送信のみ)。
 - **`UUUU` = HID Usage ID**。`0x04`='a', `0x05`='b', `0x29`=Esc, `0x13`='p' …(USB HID
   仕様の標準キーコード)。
 - **`MM` = 修飾キー bitmask(推定)**。通常キーは `00`。Shift/Ctrl 等の同時押しが

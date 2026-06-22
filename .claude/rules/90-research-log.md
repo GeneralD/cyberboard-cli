@@ -4,6 +4,34 @@
 
 ---
 
+## 2026-06-22 (続12) — ⚠ 訂正: 0x92 名は「内部定数」でなく「UI 表示ラベル」が正 + 特別キーは黒箱
+
+続11 で 0x92 名を `app.js` の `r1/r2` 表から取ったが、それは**内部定数テーブル**(レガシー名
+`KEY_FN`/`KEY_LEDSWITCH` 等)で **UI 表示名ではなかった**(ユーザー指摘「汎用 Fn なんて UI に無い」)。
+権威ソースは別の **UI 表示ラベル表 `"#code":{text,desc}`(187 エントリ)**。`_re/keycode_labels.json`。
+
+### 訂正(権威ラベル)
+
+- `#00920C0B` は内部名 `KEY_FN` だが **UI 表示 = `Fn2`**。「汎用 Fn」は誤り。
+- **Fn1-7(momentary)** = `0C20`/**`0C0B`**/`0C22`/`0C23`/`0C24`/`0C25`/`0C26`(**Fn2 だけ変則 0C0B**。
+  続11 の「0C20-0C26=fnN, 0C21=欠番」は誤り。0C21 は `RFn3`)。**Layer1-7(永続)**=`0C0F-0C15`。
+  **LFn/RFn 系**(左右別 Fn): `0C0D`LFnS / `0C0E`RFn / `0C21`RFn3 / `0C1A-0C1F`LFn1,3-7。
+- 機能: ディスプレイ LED(`01xx`: Next/On-Off/Light±/Speed±/Rotation/BT1-3/2.4G)、PCB=per-key 灯
+  (`09xx`: Next PCB/Light±/On-Off/Speed±/SAT/Color)+NP ゾーン(`090B-090F`)、Win/Mac/Battery/
+  Reset(`0922`/`0910`/`0A02`)、Touch Sen(`1300`)。
+
+### ユーザー知見 + 方針決定: firmware 特別キーは黒箱
+
+- **電源 OFF 時はキーマップ無効**。起動は **[下段の特定キー(物理 左から五番目、idx125 に対応か)]+[Esc
+  (idx0)]** の**ハードワイヤ電源コンボ**。これら「**移動不可キー**」は firmware 内部役割を持つ。
+  内部名 `KEY_FN` 等はこの firmware 表現。
+- **ユーザー判断: ここはブラックボックスで差し支えない** → 詳細仕様は解明しない。
+  **CLI は 0x92 を解釈せず passthrough**(保存・送信のみ)、`keymap.toml` は独自可読名へ機械マップ。
+- **matrix 訂正**: 続10 の「layer0 デコード=物理レイアウト(押し試験不要)」は**英字段のみ**成立。
+  **最下段は matrix 列順≠物理位置**(idx125 が物理「左から五番目」らしい)→ 下段物理対応は要押し試験(未実施)。
+
+---
+
 ## 2026-06-22 (続11) — 🎯 AM 独自機能 page 0x92 を公式 web UI から全解読 + レイヤーモデル訂正
 
 ユーザー情報: 公式 UI は **<https://diy.angrymiao.com/keyboard/>**(Vue SPA、QtWebEngine が
