@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "cyberboard",
+  "displayName": "CyberBoard CLI",
+  "description": "Configure the AngryMiao CyberBoard R4 (keymap + LED) over USB without AM Master. Wires up the cyberboard-mcp server (install it separately with: pip install 'cyberboard-cli[mcp]') so MCP clients get the CLI's operations.",
+  "author": {
+    "name": "GeneralD",
+    "url": "https://github.com/GeneralD"
+  },
+  "homepage": "https://github.com/GeneralD/cyberboard-cli",
+  "repository": "https://github.com/GeneralD/cyberboard-cli",
+  "license": "MIT",
+  "keywords": ["cyberboard", "angrymiao", "keyboard", "keymap", "led", "cli", "mcp"],
+  "mcpServers": {
+    "cyberboard": {
+      "command": "cyberboard-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

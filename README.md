@@ -97,6 +97,33 @@ Tools: `list_devices` · `device_info` · `doctor` · `verify` · `build_keymap`
 dry run (pass `execute=true` to actually write). LED tools need the `[led]`
 extra in the same environment.
 
+## Claude Code plugin
+
+If you use Claude Code, install the plugin to get the `cyberboard` MCP server
+auto-configured — no hand-editing of `mcpServers`.
+
+First, **in your terminal**, install the package so the `cyberboard-mcp`
+command is on `PATH`:
+
+```sh
+pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp] @ git+https://github.com/GeneralD/cyberboard-cli'
+```
+
+Then, **inside Claude Code** (these are Claude Code slash commands, not shell),
+add this repo as a plugin marketplace and install the plugin:
+
+```text
+/plugin marketplace add GeneralD/cyberboard-cli
+/plugin install cyberboard@cyberboard-cli
+```
+
+The plugin's MCP server points at the `cyberboard-mcp` console script, so the
+package install is the prerequisite: **if you enable the plugin before installing
+the package, the server fails to start** (`cyberboard-mcp` is not on `PATH`).
+Once the package is installed, enabling the plugin starts the server
+automatically. The plugin manifest lives at `plugins/cyberboard/`, and the
+marketplace manifest at `.claude-plugin/marketplace.json` (both in this repo).
+
 ## Why
 
 The official setup has three problems this project fixes:
