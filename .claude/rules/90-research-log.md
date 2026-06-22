@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-06-23 (続18) — M5 続: 模様回転=marquee を手続き系で実装(hue_cycle / stripes / gradient_scroll)
+
+3原型のうち第2の手続き系(advisor 順序:text → pattern → sprite)。8:1 アスペクトで幾何回転は破綻
+するので **marquee(スライド/サイクル)として実装**(advisor 解釈)。cb_anim に 3 エフェクト追加、
+全て**循環構造=継ぎ目なし by construction**。
+
++ **`hue_cycle`**: 色相環サイクル。`spread`(幅に渡る色相回転度)で「全面明滅」↔「虹が幅いっぱいに流れる」。
+  cycle_frames で長さ。frame[N]=frame[0](hue%1.0=0)で seamless。
++ **`stripes`**: 色帯スライド。period=`len(colors)×band_width` の modulo タイリング。`slant` で斜め帯。
++ **`gradient_scroll`**: `colors[-1]→colors[0]` で閉じたグラデを横流し。`width` 1 周、`slant` で斜め。
++ ヘルパ追加: `_hsv_hex`(colorsys, hue 周期で seamless)/ `_lerp_hex`(色補間)/ `_colors`(色リスト検証)。
+
+### 検証 🟢(機械 + 目視)
+
++ **継ぎ目なし機械検証**: wrap(last→first)のピクセル変化量が中央値と一致 + spread=0(完全に均一な動き)。
+  hue: N=90 change=200 wrap=200 / stripes: N=15(=3×5) change=40 wrap=40 / gradient: N=40 change=200 wrap=200。
+  全フレーム distinct(誤った全同一なし)。
++ **目視(montage)**: hue=幅いっぱいの虹が左へ流れる・鮮やか / stripes=斜め3色帯(slant=1)がスライド /
+  gradient=ocean 風グラデ(navy→cyan 閉ループ)が右へ。3つとも 40×5 で意図通り・バンディング無し。
++ 例: `examples/led/pattern-{hue,stripes,gradient}.json`。MAX256・direction guard は text_scroll と共通。
+
+### 次
+
++ **キャラ縦スクロール(sprite)+ LED デザイン agent**(3原型で唯一 vision ループが価値を出す)。
++ **ユーザー提案: ディスプレイ作成を「スキル」化**(AskUserQuestion で対話的に)→ リポを **claude plugin /
+  CLI / MCP 対応**へ。対話性=スキル層(Claude 駆動)、CLI/MCP=非対話の素(render/build/write)で分離。設計中。
+
+---
+
 ## 2026-06-23 (続17) — 🎉 M5 続: 宣言的レシピ生成 `cb_anim.py`(text_scroll seamless + sequence 連結)
 
 ユーザーがコミュニティ作品を3原型に整理(**テキスト横スクロール / キャラ縦スクロール / 模様回転**)

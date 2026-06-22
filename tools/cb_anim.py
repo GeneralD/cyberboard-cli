@@ -35,6 +35,7 @@ the artifact carries its own generator — the same convention cb_led uses (10/4
 from __future__ import annotations
 
 import argparse
+import colorsys
 import json
 import math
 import sys
@@ -56,6 +57,33 @@ def _color(s: str) -> str:
     if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
         raise SystemExit(f"cb_anim: bad color {s!r} (want #RRGGBB)")
     return "#" + h.lower()
+
+
+def _colors(seg: dict, key: str = "colors", minimum: int = 1) -> list[str]:
+    """Parse a required list of '#RRGGBB' colors from a recipe segment."""
+    raw = seg.get(key)
+    if not isinstance(raw, list) or len(raw) < minimum:
+        raise SystemExit(f"cb_anim: {seg.get('effect')!r} needs a {key!r} list "
+                         f"of >= {minimum} colors")
+    return [_color(c) for c in raw]
+
+
+def _hsv_hex(h: float, s: float, v: float) -> str:
+    """HSV (each 0..1, hue wraps) -> '#RRGGBB'. The hue wheel is periodic, which is
+    what makes a full hue sweep loop seamlessly."""
+    r, g, b = colorsys.hsv_to_rgb(h % 1.0, min(max(s, 0.0), 1.0), min(max(v, 0.0), 1.0))
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def _rgb(s: str) -> tuple[int, int, int]:
+    h = s.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _lerp_hex(c0: str, c1: str, t: float) -> str:
+    """Linear-interpolate two '#RRGGBB' by t in [0,1]."""
+    a, b = _rgb(c0), _rgb(c1)
+    return "#%02x%02x%02x" % tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 
 # --- BDF font (tom-thumb) --------------------------------------------------------
@@ -165,9 +193,94 @@ def _effect_solid(seg: dict) -> list[list[str]]:
     return [[color] * PIXELS for _ in range(n)]
 
 
+def _effect_hue_cycle(seg: dict) -> list[list[str]]:
+    """Rainbow that cycles the hue wheel — the '模様回転' archetype as a marquee.
+    Seamless by construction: a full hue sweep returns to the start (frame N == 0).
+    `spread` (degrees across the 40px width) turns a uniform breathing strip into a
+    flowing rainbow; `direction` chooses which way it flows."""
+    sat = float(seg.get("saturation", 1.0))
+    val = float(seg.get("value", 1.0))
+    cycle = max(1, int(seg.get("cycle_frames", seg.get("frames", 60))))
+    spread = float(seg.get("spread", 0.0)) / 360.0  # hue turns across the strip width
+    direction = seg.get("direction", "left")
+    if direction not in ("left", "right"):
+        raise SystemExit(f"cb_anim: hue_cycle direction must be left/right, got {direction!r}")
+    sign = -1.0 if direction == "right" else 1.0
+    frames: list[list[str]] = []
+    for i in range(cycle):
+        base = sign * i / cycle
+        cols = [_hsv_hex(base + spread * (x / W), sat, val) for x in range(W)]
+        frames.append([cols[x] for _y in range(H) for x in range(W)])
+    return frames
+
+
+def _effect_stripes(seg: dict) -> list[list[str]]:
+    """Sliding colored bands (vertical, or diagonal via `slant`). Seamless by modulo
+    tiling over period = len(colors) * band_width."""
+    colors = _colors(seg, minimum=1)
+    band = max(1, int(seg.get("band_width", 4)))
+    step = max(1, int(seg.get("step", 1)))
+    slant = int(seg.get("slant", 0))  # x-shift per row -> diagonal bands
+    direction = seg.get("direction", "left")
+    if direction not in ("left", "right"):
+        raise SystemExit(f"cb_anim: stripes direction must be left/right, got {direction!r}")
+    period = len(colors) * band
+    nframes = math.ceil(period / step)
+    if period % step:
+        _warn(f"stripes: period {period} not divisible by step {step} — loop may jitter")
+    sign = -1 if direction == "right" else 1
+    frames: list[list[str]] = []
+    for i in range(nframes):
+        off = (sign * i * step) % period
+        flat = [colors[0]] * PIXELS
+        for y in range(H):
+            r = y * W
+            for x in range(W):
+                sx = (x + y * slant + off) % period
+                flat[r + x] = colors[(sx // band) % len(colors)]
+        frames.append(flat)
+    return frames
+
+
+def _effect_gradient_scroll(seg: dict) -> list[list[str]]:
+    """A closed-loop multi-stop gradient scrolling horizontally (seamless). The ramp
+    wraps colors[-1] -> colors[0], so the scroll has no seam. `width` is the px span of
+    one full gradient loop; `slant` tilts it diagonally."""
+    colors = _colors(seg, minimum=2)
+    width = max(2, int(seg.get("width", W)))
+    step = max(1, int(seg.get("step", 1)))
+    slant = int(seg.get("slant", 0))
+    direction = seg.get("direction", "left")
+    if direction not in ("left", "right"):
+        raise SystemExit(f"cb_anim: gradient_scroll direction must be left/right, got {direction!r}")
+    n = len(colors)
+    ramp = []
+    for px in range(width):
+        t = px / width * n  # position around the closed color loop, 0..n
+        i0 = int(t) % n
+        ramp.append(_lerp_hex(colors[i0], colors[(i0 + 1) % n], t - int(t)))
+    nframes = math.ceil(width / step)
+    if width % step:
+        _warn(f"gradient_scroll: width {width} not divisible by step {step} — loop may jitter")
+    sign = -1 if direction == "right" else 1
+    frames: list[list[str]] = []
+    for i in range(nframes):
+        off = (sign * i * step) % width
+        flat = [ramp[0]] * PIXELS
+        for y in range(H):
+            r = y * W
+            for x in range(W):
+                flat[r + x] = ramp[(x + y * slant + off) % width]
+        frames.append(flat)
+    return frames
+
+
 EFFECTS = {
     "text_scroll": _effect_text_scroll,
     "solid": _effect_solid,
+    "hue_cycle": _effect_hue_cycle,
+    "stripes": _effect_stripes,
+    "gradient_scroll": _effect_gradient_scroll,
 }
 
 
