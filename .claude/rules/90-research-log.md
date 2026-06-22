@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-06-22 — 🎉 実機 R4 で読み取りハンドシェイク成功(プロトコル疎通確認)
+
+ユーザーが R4 を有線接続。`ioreg`/`hidutil` で同定 → `pyserial` で 64B フレームを実送信し、
+正しい応答を取得。**最大の 🔴(実機が我々のバイトを受理するか / CRC poly)が解消**。
+
+### デバイス同定(実機)
+
+- USB: `idVendor=0x05AC`(1452, Apple), `idProduct=0x0256`(598), Product=`CYBERBOARD`,
+  Vendor=`AngryMiao`。シリアルノード = **`/dev/cu.usbmodem212204`**(ioreg location
+  `0x02122000` と一致、world RW で sudo 不要)。
+- **HID も `0x05AC:0x0256` で列挙**(`hidutil`)。デコンパイル表の `0x3151:0x4015` は
+  **出現せず** → 旧世代/ドングル用と推定。**R4 検出を `0x3151` 前提にすると失敗する**。
+- 同環境に LG モニタ `cu.usbmodemABC1234567892` が併存 → ノード名選択の危険を再確認。
+
+### 実送信した read-only クエリ(`_re/probe_product_id.py` / `probe_reads.py`)
+
+`pyserial`(`uv` venv)で 9600/8N1、`reset_input_buffer` → write → `read(64)`:
+
+| 送信 | 応答(hex 抜粋) | デコード |
+|---|---|---|
+| `[1,1]` product_id | `01 01 04 43423034 … fd` | **`CB04`**(len=4) |
+| `[1,2]` product_info | `01 02 16 414d5f43423034… 9e` | 版 **`AM_CB040.N40.R1.01.50`**(len=0x16) |
+| `[2,6]` check_pages | `02 06 03 … 2c` | **pages_num=3** |
+
+### 確定事実(→ `30` §0/§1/§2/§7/§8 反映済み)
+
+- **トランスポート = USB CDC シリアル @9600 が実機で応答**(理論でなく実証)。
+- **CRC-8 poly0x07 が双方向で正しい**: 我々の送信フレームが受理され応答が返り、かつ
+  応答の `[63]` も同 CRC で検証 OK。→ `crc8` pkg 既定という推定が**実機確定**。
+- **64B フレーム / カテゴリ・サブコマンド / 応答フォーマット**を実機確認。
+  query 応答 = `[0,1]`=コマンドエコー, `[2]`=長さ, `[3:3+len]`=ascii, `[63]`=CRC-8。
+- **R4: product_id=`CB04`, 版=`AM_CB040.N40.R1.01.50`, pages_num=3**。
+- 旧メモ修正: product_info は `[3:5+len]` でなく `[2]`=len / `[3:3+len]`(product_id と同形)。
+
+### 次にやること
+
+- **M1 本丸 = 書き込み経路の実機テスト**: 既知正解(merger `outputs/*.json`)を
+  `JSON_START[1,5]`→各セクション→`JSON_END[1,6]` で実送信し、反映/永続を確認。
+  読み取りは確認済みなのでフレーム生成は実機互換 = リスク低。
+- CLI: `devices`(列挙)+ `device info`(詳細)サブコマンドは上記プローブがそのまま実装になる
+  (`40` 反映)。
+- 書き込み系 `rev[2]` 応答コード、Fn/マクロ、物理キー↔layer マップ。
+
+---
+
 ## 2026-06-21 — miaomerge 解析 + 実機USBスキャン(初)
 
 ### miaomerge(`GeneralD/miaomerge`)= merger の Tauri リライト

@@ -88,7 +88,8 @@ source = "matrix.json"
 ## CLI コマンド構成(案)
 
 ```text
-ambctl devices                 # 接続デバイス列挙(VID/PID/usage/経路を表示)
+ambctl devices                 # 接続デバイス列挙(product_id/version/pages/port)
+ambctl device info [PORT]      # 1台の詳細(未指定なら自動検出)
 ambctl build  -k keymap.toml -l led.toml -o config.json   # 独自→IR(純正JSON)
 ambctl verify config.json      # IRスキーマ検証(書き込まない)
 ambctl write  config.json [--section keymap|led|all] [--slot 1,2,3] [--dry-run]
@@ -96,6 +97,10 @@ ambctl read   -o dump.json     # デバイス→IR 読み戻し(cmd_get_* 利用
 ambctl diff   dump.json config.json   # 書き込み前後の差分確認
 ```
 
+- **`devices` / `device info` は実装済みの土台あり**🟢: `tools/cb_device.py`(+ 共有コア
+  `tools/cb_protocol.py`)。実機 R4 で動作確認済み(`90` 2026-06-22)。
+  `list`/`info --json` を持ち、これをそのまま CLI サブコマンドへ昇格できる。
+  プロジェクトローカル skill = [`cyberboard-device`](../skills/cyberboard-device/SKILL.md)。
 - `write` は段階的に: 接続確立 → (必要なら read で現状退避) → 送信 → **read で検証**。
 - `--dry-run` は実送信せずチャンク列を表示。
 - 堅牢化(`30` §6): 列挙条件の厳密化(usage/経路)+ 明示リトライ + 各段で読み戻し検証。
@@ -106,8 +111,10 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
   確定後に Rust/Go へ移植も可。
 - **トランスポート = シリアル**: `pyserial`。`/dev/cu.usbmodem*` を開く(**`tty.*` 不可**, §接続)。
   9600/8N1, `JSON_START..JSON_END` 手順、各フレーム 5ms 間隔(`30` §5)。
-- **検出**: `pyserial` で `cu.usbmodem*` 列挙 → 各候補へ `[1,1]` 投げ product_id で同定
-  (R4=`CB04`、`*_DONGLE_*` は除外)。HID 列挙(`hidapi`, VID `0x3151`)は補助。
+- **検出**🟢: `pyserial` で `cu.usbmodem*` 列挙 → 各候補へ `[1,1]` 投げ **CRC有効な
+  product_id 応答**で同定(R4=`CB04`、`*_DONGLE_*` は除外)。実機確認済み(`tools/cb_device.py`)。
+  ⚠️ 実機 R4 は **HID も `0x05AC:0x0256`**(`0x3151` は出ない)→ HID/VID ベース検出は当てにせず
+  **シリアル `[1,1]` プローブを正**とする(`30` §1a)。
 - **フレーム生成**: 64B 固定 + **CRC-8(poly 0x07)**。暗号化なし(`tinyaes` 不要)。
   `TransJsonCmd` のロジックをそのまま移植。
 
