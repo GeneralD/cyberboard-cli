@@ -5,12 +5,16 @@
 
 ```sh
 # プレビュー GIF(base 不要・高速イテレーション用)
-uv run tools/cb_anim.py preview -r examples/led/text-scroll.json -o /tmp/preview.gif
+uv run --extra led cyberboard anim preview -r examples/led/text-scroll.json -o /tmp/preview.gif
 
 # 完全な base IR の slot へ焼き込み(per-key keyframes は base 由来で維持)+ プレビュー同時出力
-uv run tools/cb_anim.py render -r examples/led/sequence.json -b <base.json> -o config.json --gif /tmp/preview.gif
-# config.json を実機へ: uv run tools/cb_write.py config.json --execute
+uv run --extra led cyberboard anim render -r examples/led/sequence.json -b <base.json> -o config.json --gif /tmp/preview.gif
+# config.json を実機へ: uv run cyberboard write config.json --execute
 ```
+
+> LED 系(`anim` / `led`)は Pillow が要るので `--extra led`。デバイス I/O(`write` /
+> `read` / `devices`)は pyserial が core 依存なので追加 extra 不要。インストール後は
+> `uv run` を省いて `cyberboard …` で起動できる(`pip install -e '.[led]'` / `uv sync --extra led`)。
 
 ## レシピ書式
 

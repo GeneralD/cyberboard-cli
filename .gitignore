@@ -16,3 +16,11 @@ AM_Master_mac_*_extracted/
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Python / uv (the cyberboard CLI package)
+.venv/
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
