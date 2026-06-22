@@ -1,0 +1,14 @@
+{
+  "name": "cyberboard-cli",
+  "owner": {
+    "name": "GeneralD"
+  },
+  "description": "CyberBoard R4 CLI — Claude Code plugin marketplace.",
+  "plugins": [
+    {
+      "name": "cyberboard",
+      "source": "./plugins/cyberboard",
+      "description": "Configure the CyberBoard R4 (keymap + LED) over USB without AM Master. Bundles the cyberboard-mcp server."
+    }
+  ]
+}
