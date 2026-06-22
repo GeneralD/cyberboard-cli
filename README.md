@@ -22,11 +22,14 @@ without AM Master's flaky connection.
 
 ## Install
 
-Requires **Python ≥ 3.11**. The CLI ships two dependency tiers, kept apart so a
-keymap-only or device-only setup stays lean:
+Requires **Python ≥ 3.11**. Dependencies are split into a small core plus
+optional extras, so a keymap-only or device-only setup stays lean:
 
 - **core** — `pyserial`, for device I/O (`devices` / `read` / `write` / `doctor`).
-- **`[led]`** — `pillow`, for LED authoring (`led` / `anim`). Optional.
+- **`[led]`** — `pillow`, for LED authoring (`led` / `anim`).
+- **`[verify]`** — `jsonschema`, for strict schema validation in `verify`
+  (it falls back to basic checks without it).
+- **`[all]`** — everything (`pillow` + `jsonschema`).
 
 Not on PyPI yet, so install straight from git (the default branch is `main`):
 

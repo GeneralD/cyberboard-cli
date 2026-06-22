@@ -6,7 +6,7 @@
 
 ## 2026-06-23 (続20) — 製品化 #8: 単体配布をクリーン環境で実証 + README に Install/Usage
 
-PR #5 で pyproject まで入ったので、issue #8 の残作業は**実証 + ドキュメント**に縮小。受け入れ条件
+issue #5(PR #9)で pyproject まで入ったので、issue #8 の残作業は**実証 + ドキュメント**に縮小。受け入れ条件
 (install 後どこでも `cyberboard --help` / LED 不要構成では pillow 不要)を**クリーン環境で実機確認**。
 
 ### 実証 🟢(`$CLAUDE_JOB_DIR/tmp/pkgtest`、すべてリポ外の throwaway venv)
