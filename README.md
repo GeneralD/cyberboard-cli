@@ -4,20 +4,76 @@
   <img src="assets/hero.jpg" alt="cyberboard-cli — write CyberBoard R4 config from the terminal" width="420">
 </p>
 
-![status](https://img.shields.io/badge/status-research%20%2F%20WIP-yellow) ![platform](https://img.shields.io/badge/platform-macOS-blue) ![target](https://img.shields.io/badge/target-CyberBoard%20R4-blue) ![protocol](https://img.shields.io/badge/protocol-reverse--engineered-purple) ![transport](https://img.shields.io/badge/transport-USB%20CDC%20serial-success) ![license](https://img.shields.io/badge/license-MIT-green)
+![status](https://img.shields.io/badge/status-CLI%20usable%20·%20WIP-success) ![platform](https://img.shields.io/badge/platform-macOS-blue) ![target](https://img.shields.io/badge/target-CyberBoard%20R4-blue) ![python](https://img.shields.io/badge/python-%3E%3D3.11-blue) ![install](https://img.shields.io/badge/install-uv%20%2F%20pip-blue) ![protocol](https://img.shields.io/badge/protocol-reverse--engineered-purple) ![transport](https://img.shields.io/badge/transport-USB%20CDC%20serial-success) ![license](https://img.shields.io/badge/license-MIT-green)
 
-A protocol knowledge base — and a planned CLI — for writing **AngryMiao
+A CLI — and the protocol knowledge base behind it — for writing **AngryMiao
 CyberBoard R4** configuration **without the official AM Master app**.
 
 The goal: manage your keymap and LED display as **separate, version-controllable
 sources**, and write them straight to the board from the command line — robustly,
 without AM Master's flaky connection.
 
-> **Status:** the write protocol has been fully reverse-engineered and the
-> encoding is verified against real config data. The CLI itself is not yet
-> implemented — this repo currently ships the **research** (a self-contained
-> protocol spec under [`.claude/rules/`](.claude/rules/)) plus the verification
-> tooling. Live-hardware capture is the only remaining gap before a write PoC.
+> **Status:** the write protocol is fully reverse-engineered, and the `cyberboard`
+> CLI is implemented and installable (see **Install** below). Writing and keymap
+> read-back are **verified on real R4 hardware**; keymap authoring (TOML) and LED
+> display authoring (GIF / declarative recipes) work today. Still WIP: per-key LED
+> authoring, the MCP server, and the Claude plugin. The self-contained protocol
+> spec lives under [`.claude/rules/`](.claude/rules/) (Japanese).
+
+## Install
+
+Requires **Python ≥ 3.11**. Dependencies are split into a small core plus
+optional extras, so a keymap-only or device-only setup stays lean:
+
+- **core** — `pyserial`, for device I/O (`devices` / `read` / `write` / `doctor`).
+- **`[led]`** — `pillow`, for LED authoring (`led` / `anim`).
+- **`[verify]`** — `jsonschema`, for strict schema validation in `verify`
+  (it falls back to basic checks without it).
+- **`[all]`** — everything (`pillow` + `jsonschema`).
+
+Not on PyPI yet, so install straight from git (the default branch is `main`):
+
+```sh
+# Run once, no install (ephemeral) — with LED authoring:
+uvx --from 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli' cyberboard --help
+
+# Install as a persistent tool (uv):
+uv tool install 'git+https://github.com/GeneralD/cyberboard-cli'                              # core only
+uv tool install 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli'        # + LED
+
+# Or pipx / pip into a venv:
+pipx install 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli'
+pip install 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli'
+```
+
+From a clone, run it without installing via uv:
+
+```sh
+uv run --extra led cyberboard --help     # LED commands need --extra led; device commands don't
+```
+
+## Usage
+
+`cyberboard <command>` — run `cyberboard <command> --help` for each command's options.
+
+| Command | What |
+|---|---|
+| `devices` / `device` | List connected boards / show one device's detail |
+| `doctor` | Non-destructive connectivity health check |
+| `build` | `keymap.toml` → IR config (`--dump` for the reverse) |
+| `verify` | Validate an IR config against the schema |
+| `led` | GIF ⇄ IR display codec (`gif2ir` / `ir2gif` / `recipe`) |
+| `anim` | Render declarative LED animations (`render` / `preview`) |
+| `read` | Read config back from the device (`keymap`) |
+| `write` | Write an IR config to the device |
+| `set-time` | Set the device RTC clock |
+
+```sh
+cyberboard devices                                              # find your board
+cyberboard anim preview -r examples/led/text-scroll.json -o preview.gif   # author an LED animation
+cyberboard build -k keymap.toml -b base.json -o config.json     # build a config from a TOML keymap
+cyberboard write config.json --execute                          # write it (omit --execute for a dry run)
+```
 
 ## Why
 
@@ -62,13 +118,24 @@ sources are **not** redistributed here — see *Legal*):
 
 ## Roadmap
 
-- **M0 — Protocol analysis** ✅ decompiled; encoding verified against real data.
-  Remaining: live serial capture to confirm the wire bytes.
-- **M1 — Full write** of a known-good config (the merger's outputs) over the
-  reverse-engineered sequence.
-- **M2 — Read-back + diff** for verification.
-- **M3 — Custom schema → IR build** (keymap / LED kept separate).
-- **M4 — Partial writes** (LED slot only) + connection hardening.
+Done:
+
+- **M0 — Protocol analysis** ✅ decompiled; encoding verified; wire bytes
+  confirmed by live serial handshake on a real R4.
+- **M1 — Full write** ✅ a known-good config writes over the reverse-engineered
+  sequence (LED visually confirmed on hardware).
+- **M2 — Read-back + diff** ✅ for the keymap (write → read → 1400/1400 match).
+  LED has no read-back path, so it's authored from source.
+- **M3 — Keymap build** ✅ `keymap.toml` → IR with lossless round-trip.
+- **M5 — LED display authoring** ✅ GIF ⇄ IR codec + declarative animation recipes.
+
+Productization (in progress): a unified `cyberboard` CLI core (done), standalone
+packaging (this), then an MCP server and a Claude plugin that all call the same
+core — plus per-key LED authoring and a sprite/vision LED design loop.
+
+> Note: partial writes are **not** supported by firmware (`JSON_START` erases the
+> whole config), so "swap just the LED" is done by read → merge → full write, not
+> by a partial write.
 
 ## Legal
 

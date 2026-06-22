@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-06-23 (続20) — 製品化 #8: 単体配布をクリーン環境で実証 + README に Install/Usage
+
+issue #5(PR #9)で pyproject まで入ったので、issue #8 の残作業は**実証 + ドキュメント**に縮小。受け入れ条件
+(install 後どこでも `cyberboard --help` / LED 不要構成では pillow 不要)を**クリーン環境で実機確認**。
+
+### 実証 🟢(`$CLAUDE_JOB_DIR/tmp/pkgtest`、すべてリポ外の throwaway venv)
+
++ `uv build --wheel` → **core-only venv** に `pip install <whl>`: `cyberboard --help` が任意 dir で動作 /
+  `devices` が実機 R4 検出 / pillow 不在 / `anim preview`(有効レシピ)→ **traceback でなく clean hint + rc=1**
+  (= #9 の遅延 import 対策が wheel の bundled `_tools` レイアウトでも効く)。
++ **`[led]` venv**: `pip install '<whl>[led]'` → `anim preview` が GIF 生成。**bundled fonts(tom-thumb)が
+  wheel 同梱で機能** = force-include `tools`→`cyberboard/_tools` が font 解決込みで正しい。
++ `uvx --from . cyberboard --help` / **`uv tool install '.[led]'` → `cyberboard --version` が /tmp から動作**
+  → uninstall でクリーンアップ。= uv tool / uvx / pipx / pip の全経路を確認。
+
+### README
+
++ 古い framing(「planned CLI」「CLI 未実装」「live capture が唯一の gap」)を是正。**Install**(uvx /
+  uv tool / pipx / pip の git+URL、core vs `[led]` extras、clone での `uv run --extra led`)+ **Usage**
+  (command 表 + 例)を追加。Roadmap を実状(M0-M3/M5 done、製品化進行中、partial write 非対応の注記)に更新。
++ PyPI 未公開ゆえ install は `git+https://…cyberboard-cli`(default branch=main)。公開は将来。
+
 ## 2026-06-23 (続19) — 製品化 #5: CLI コア統一(`cyberboard` 単一エントリ + pyproject)
 
 POC→PR フローの最初の PR(`feat/5-cli-core`)。バラバラの `tools/cb_*.py` を**単一の
