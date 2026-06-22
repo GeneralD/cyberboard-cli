@@ -22,7 +22,9 @@ from typing import Any
 
 try:
     from mcp.server.fastmcp import FastMCP
-except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
+except ImportError as exc:  # pragma: no cover - exercised only without the extra
+    # ImportError (not just ModuleNotFoundError) so an incompatible/old `mcp`
+    # without `FastMCP` still yields the install hint instead of a traceback.
     raise SystemExit(
         "cyberboard-mcp needs the MCP SDK: pip install 'cyberboard-cli[mcp]'"
     ) from exc
@@ -59,6 +61,9 @@ def _run_json(args: list[str], field: str) -> dict[str, Any]:
             result[field] = json.loads(result["stdout"])
         except json.JSONDecodeError as exc:
             result["ok"] = False
+            # The CLI exited 0 but its output was unparseable — keep exit_code
+            # consistent with ok=False so clients can treat it as a failure.
+            result["exit_code"] = result["exit_code"] or 1
             result["error"] = f"could not parse CLI JSON output: {exc}"
     return result
 
@@ -136,11 +141,16 @@ def ir_to_gif(config: str, slot: int, out_gif: str, scale: int = 16) -> dict[str
 
 @mcp.tool()
 def read_keymap(compare: str = "") -> dict[str, Any]:
-    """Read the keymap back from the device. With `compare`, diff against an IR config."""
-    args = ["read", "keymap"]
+    """Read the keymap back from the device.
+
+    Without `compare`, returns the keymap as a structured `key_layer` JSON
+    fragment (in the `keymap` field), like the other read-only tools. With
+    `compare`, returns the human-readable diff against an IR config in `stdout`
+    (the CLI's compare mode prints a diff, not JSON).
+    """
     if compare:
-        args += ["--compare", compare]
-    return _run(args)
+        return _run(["read", "keymap", "--compare", compare])
+    return _run_json(["read", "keymap", "--json"], "keymap")
 
 
 @mcp.tool()
