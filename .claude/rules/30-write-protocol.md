@@ -232,8 +232,9 @@ serial.Serial(com_json, baudrate=9600, timeout=10, write_timeout=1)
 
 残る 🔴:
 
-1. **書き込み経路の実機テスト**(§5 の JSON_START..frames..JSON_END を実送信し、反映/永続を確認)。
-   ← M1 の本丸。読み取りは確認済みなので次はここ。
+1. **フル設定書き込みの実機テスト**(§5 の JSON_START..frames..JSON_END を実送信し、反映/永続を確認)。
+   ← M1 の本丸。**制御系の書き込みは実証済み**(`[1,3]` set_time が ACK `[2]==1`,
+   `tools/cb_settime.py`, `90` 2026-06-22)。残るは多フレームトランザクション本体。
 2. Fn/マクロの扱い(§5 注記)。
 3. spotlight(car_light)が R4 に存在するか。
 4. 書き込み系応答コードの全集合(query 系は §7 で確定。`rev[2]` の `1`/`2` 等は write で確認)。
