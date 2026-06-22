@@ -164,6 +164,16 @@ def ir2gif(args: argparse.Namespace) -> int:
         raise SystemExit(f"cb_led: page {page_index} has no display frames")
 
     frames = [fr["frame_RGB"] for fr in fd]
+    # ir2gif is a viewer; GIF can't faithfully hold rich color or dup frames (90 续17).
+    # Warn rather than crush silently (project rule: silent cap 禁止).
+    colors = {px for f in frames for px in f}
+    if len(colors) > 256:
+        _warn(f"{len(colors)} distinct colors across frames > 256 — GIF's single global "
+              f"palette will approximate color (IR JSON is the lossless form, 90 续17)")
+    dups = sum(1 for i in range(1, len(frames)) if frames[i] == frames[i - 1])
+    if dups:
+        _warn(f"{dups} identical consecutive frame(s) will be coalesced by the GIF writer "
+              f"(playback timing preserved, but the GIF's frame count will differ)")
     duration = args.speed_ms if args.speed_ms is not None else page.get("speed_ms", 100)
     n = frames_to_gif(frames, args.output, args.scale, duration, args.recipe)
     rec = " + recipe" if args.recipe else ""
