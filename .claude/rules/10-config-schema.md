@@ -38,7 +38,9 @@ JSON の構造。**1 ファイルにキーマップと LED 表示が同居して
 例 `#00070029`, `#00070004`。実測での裏取り(`swap_key`):
 `#00070004`(a) ↔ `#00070005`(b)、`#00070007`(d) ↔ `#00070008`(e)。
 
-- **`PP` = HID Usage Page**。`07` = Keyboard/Keypad。
+- **`PP` = HID Usage Page**。実データで出現 🟢(`90` 続10): `0x07`=Keyboard/Keypad /
+  `0x0C`=Consumer(メディア。`0xB6`=Prev, `0xCD`=Play/Pause, `0xE9`=Vol+…) /
+  `0x92`=**AM ベンダー独自 Fn**(各コードの意味は JS UI 側にあり Python decompile に無い 🔴)。
 - **`UUUU` = HID Usage ID**。`0x04`='a', `0x05`='b', `0x29`=Esc, `0x13`='p' …(USB HID
   仕様の標準キーコード)。
 - **`MM` = 修飾キー bitmask(推定)**。通常キーは `00`。Shift/Ctrl 等の同時押しが
@@ -60,8 +62,11 @@ JSON の構造。**1 ファイルにキーマップと LED 表示が同居して
 ```
 
 - `layer[i]` = 物理マトリクス位置 i(25×8=200)に割り当てる HID キーコード。
-- 製品ごとに「カスタム行列データの位置」が異なる(コメント記載)→ R4 の物理配列との
-  対応マップが別途必要(要確認)。
+- **R4 の物理配列マップ確定** 🟢(`90` 続10, `experiments/keymap-matrix/`): **`index = row*25 + col`**
+  (各行が 25 ごとに始まる)。物理キー **81 個**は **row 0-5 / col 0-14** に分布、row 6-7 と
+  右端の余剰列は未使用。右端列(col14)= Del/Home/End/PgUp/PgDn のナビ列。**layer 0 をデコード
+  すると物理レイアウトそのもの**(押し試験不要でマップ導出可)。`decode_keymap.py` で可視化。
+- レイヤ: layer0=ベース / layer1=Fn(上段が `0x92` AM 独自機能)/ layer2-6=追加(公式 UI で 7 まで)。
 
 ### その他のキー機能(input → out)
 

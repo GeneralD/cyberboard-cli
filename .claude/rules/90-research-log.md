@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-06-22 (続10) — 🎯 キーマップ解明: matrix マップ / フォーマット / レイヤ / 設定種別
+
+B3(主目的・keymap 側)。実データ(復元済み既知正解 = デバイス内容)を HID デコードして構造確定。
+`experiments/keymap-matrix/`(`decode_keymap.py` + README)。
+
+### 確定事実 🟢
+
+- **matrix = 25 列 × 8 行 = 200、`index = row*25 + col`**(各行が 25 ごとに始まる:
+  使用 index = 0-14 / 25-39 / 50-64 / 75-89 / 100-113 / 125-139)。物理キー **81 個**は
+  row 0-5 / col 0-14 に分布、row 6-7 と右端余剰列は未使用。右端列(col14)= Del/Home/End/
+  PgUp/PgDn のナビ列(idx 14/39/64/89)。
+- **layer 0 をデコードすると物理レイアウトそのもの** → **押し試験不要で物理キー↔index 確定**。
+  グリッド: row0=Esc/F1-F6/メディア/Del/Home、row1=数字段、row2=QWERTY、row3=ASDF段、
+  row4=ZXCV段、row5=Fn/Alt/Gui/Space/矢印。
+- **キーコード `#MMPPUUUU`**: PP(usage page)実出現 = `0x07`Keyboard / `0x0C`Consumer
+  (メディア) / `0x92`AM ベンダー Fn。MM=修飾 bitmask、`#00000000`=未割当。
+- **7 レイヤ**(公式 UI と一致): layer0=ベース / layer1=Fn(上段が 0x92 AM 機能に化ける) /
+  layer2-6=追加(サンプルは未カスタム複製)。
+- **設定できるキー機能の種類**(`CyberBoardJson` クラス): `KeyLayer` / `FnKey` / `SwapKey` /
+  `ExchangeKey` / `MACROKey` / `TabKey` / press_hold(`[6,13]`+`[6,11]`)/ change_key(`[6,11]`)。
+
+### 未解明 🔴
+
+- **AM 独自 Fn(0x92)各コードの意味**(0x100-0x108, 0x130, 0x900-0x903, 0xa01, 0x0b…)。
+  Python に無く **QtWebEngine の JS UI 側**で定義 → app の web 資産から要抽出。
+- `tab_key` / press_hold / change_key の正確なフィールド書式 + UI 機能名。
+- MM 修飾 bitmask の具体ビット割当(要実データ/実機確認)。
+
+### 次
+
+- keymap.toml スキーマ設計(人間可読名 ↔ #MMPPUUUU ↔ 物理位置)。AM Fn 名は web UI 抽出後に拡充。
+
+---
+
 ## 2026-06-22 (続9) — 公式の書込ゲート = `pages_num`(中古個体が書けない元凶を特定)
 
 ユーザー談「メルカリ中古は**いきなり書けず**、初期化したら書けた。キーボード状態が公式アプリの
