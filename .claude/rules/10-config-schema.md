@@ -40,7 +40,10 @@ JSON の構造。**1 ファイルにキーマップと LED 表示が同居して
 
 - **`PP` = HID Usage Page**。実データで出現 🟢(`90` 続10): `0x07`=Keyboard/Keypad /
   `0x0C`=Consumer(メディア。`0xB6`=Prev, `0xCD`=Play/Pause, `0xE9`=Vol+…) /
-  `0x92`=**AM ベンダー独自 Fn**(各コードの意味は JS UI 側にあり Python decompile に無い 🔴)。
+  `0x92`=**AM ベンダー独自機能**(公式 web JS から全解読 🟢 `90` 続11):`0x0Cxx`=レイヤー/Fn
+  (`0C0B`=KEY_FN, `0C0F-0C15`=layer1-7 永続, `0C20-0C26`=layerN momentary=fnN)、`0x01xx`=LED/接続
+  (on-off, 明るさ±, 速度±, 次ページ, BT1-3, 2.4G)、`0x09xx`=ローカル灯効モード、`0x0Axx`=電源/factory_reset。
+  詳細表は `experiments/keymap-matrix/`(生表は `_re/` ローカル)。
 - **`UUUU` = HID Usage ID**。`0x04`='a', `0x05`='b', `0x29`=Esc, `0x13`='p' …(USB HID
   仕様の標準キーコード)。
 - **`MM` = 修飾キー bitmask(推定)**。通常キーは `00`。Shift/Ctrl 等の同時押しが
@@ -66,7 +69,8 @@ JSON の構造。**1 ファイルにキーマップと LED 表示が同居して
   (各行が 25 ごとに始まる)。物理キー **81 個**は **row 0-5 / col 0-14** に分布、row 6-7 と
   右端の余剰列は未使用。右端列(col14)= Del/Home/End/PgUp/PgDn のナビ列。**layer 0 をデコード
   すると物理レイアウトそのもの**(押し試験不要でマップ導出可)。`decode_keymap.py` で可視化。
-- レイヤ: layer0=ベース / layer1=Fn(上段が `0x92` AM 独自機能)/ layer2-6=追加(公式 UI で 7 まで)。
+- レイヤ: **7 つ対等**(配列 index 0-6 = 公式 layer1-7、**デフォルト layer1=index0**)。レイヤー遷移は
+  キーコードで:**fnN=momentary / layerN=永続**(`0x0Cxx`、下記)。「layer1 が Fn 専用」ではない。
 
 ### その他のキー機能(input → out)
 

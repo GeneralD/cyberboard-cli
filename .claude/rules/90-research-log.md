@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-06-22 (続11) — 🎯 AM 独自機能 page 0x92 を公式 web UI から全解読 + レイヤーモデル訂正
+
+ユーザー情報: 公式 UI は **<https://diy.angrymiao.com/keyboard/>**(Vue SPA、QtWebEngine が
+リモートロード。app=インポート+書込専用 / web=エクスポート専用 / 編集は両方可 / **書込は app のみ**)。
+fn1-7=momentary、layer1-7=永続、**デフォルト layer1**。
+
+### やったこと
+
+- 公式サイトの JS チャンク 46 本(8.6MB)を取得 → `app.288be2f6.js` に**キーコード↔機能名表
+  282 ペア(uniq 141)**を発見。`r1:"name",r2:"#MMPPUUUU"` 形式。生表は `_re/keycode_table.json`
+  (gitignore 下)に保存。コミット側には解読した事実のみ記録(方針: 抽出物はローカル限定)。
+
+### 確定事実 🟢
+
+- **page 構成**: 0x07 標準キー(208) / 0x0C メディア(12) / **0x92 AM 独自(31 uniq)**。
+- **0x92 レイヤー/Fn 機構**(UUUU=0x0Cxx): `0C0B`=KEY_FN(汎用 momentary) / `0C0F-0C15`=
+  **layer1-7 永続**(`key_cmd_set_key_layerN`) / `0C20-0C26`=**layer1-7 momentary=fnN**
+  (`key_hold_set_key_layerN`、`0C21`=layer2 hold は表に欠番) / `0C0D`=レイヤー左送り。
+- **0x92 LED/接続/system**: `0100`次ページ / `0101`on-off / `0102-0103`明るさ± / `0104-0105`速度± /
+  `0106-0108`BT1-3 / `0130`2.4G / `0900-0903`ローカル灯効モード / `0A01`電源 / `0A02`factory_reset。
+- **UUUU は 16bit**: 私の旧 "idx125=0x0b" は誤読、正しくは `#00920C0B`(UUUU=0x0C0B)。デコーダは正。
+- **レイヤーモデル訂正**(続10 の誤り): 「layer0=base / layer1=Fn 専用」は**誤り**。**7 レイヤは対等**、
+  配列 index 0-6=公式 layer1-7、デフォルト=layer1(index0)。Fn/layer は任意キーに置ける切替キーコード。
+
+### アーキ整理(ユーザー確認)
+
+- **キーカスタムは web/app 両方可**(web=エクスポート, app=インポート)、**デバイス書込は app のみ**。
+  → 我々の CLI は「app の書込」を内製化する位置づけ。keymap 編集の知識源は web JS(本解読)。
+
+### 次
+
+- keymap.toml スキーマ設計(独自可読名 ↔ #MMPPUUUU。0x92 は `Fn`/`Layer2`/`MoLayer3`/`BT1`/`Led*` 等へ)。
+- 残🔴: tab_key/press_hold/change_key 書式 / MM 修飾ビット割当。
+
+---
+
 ## 2026-06-22 (続10) — 🎯 キーマップ解明: matrix マップ / フォーマット / レイヤ / 設定種別
 
 B3(主目的・keymap 側)。実データ(復元済み既知正解 = デバイス内容)を HID デコードして構造確定。
