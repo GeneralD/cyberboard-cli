@@ -4,6 +4,275 @@
 
 ---
 
+## 2026-06-22 (続7) — ライティング(per-key 灯効)= 公式 UI で 100 フレーム上限(別系統)
+
+ユーザー指摘: 純正 AM Master には display アニメとは別に**「ライティング設定」があり、
+1 アニメ 100 フレームまで作れる**(display の 300 とは別の上限)。
+
+我々のモデルでは **ライティング = `keyframes`(各キーのバックライト 90 個)**(`10` 既述)。
+display(`frames` 200px)とは別系統で、別の作成上限を持つ。
+
+### 重要な反例(100 は firmware 上限ではない)
+
+- **既知正解 `merged_20250916_161615.json` の page 7 `keyframes` = 123 フレーム**(> 100)。
+  これを実機に書込→**ACK SUCCESS**(以前 LED 目視も済)。= **100 は「公式 UI の 1 アニメ
+  あたり作成上限」**であって firmware のハード上限**ではない**(display の 300 と同じ性質)。
+  merger の `combine` 連結で 100 を超えて 123 まで伸ばせている。
+- 実測 keyframes(同設定): page5=42 / page6=42 / page7=123。display: 66/125/53。
+- **per-key の真の再生上限は未検証 🔴**: display の教訓「ACK≠再生」より、123 が ACK しても
+  全 123 枚再生される保証はない(真値は 100 か 256 か中間か不明)。per-key は 90 キーしか
+  無く**数字描画で数えられない**ため、display で使った目視カウント手法が使えない。
+- 構造上限は **256**: per-key `frame_index` は `[5,pi]` の `[2]` に **1 バイト**送出。
+
+### スキーマ方針(enforce せず文書化)
+
+- **keyframes を 100 に cap しない**(= 既知正解 123 を弾くため不可)。`rgbFrameSet` 共有の
+  **256(構造上限)を維持**し、`pageDatum.keyframes` の description に 100 UI 上限 +
+  123 反例 + 再生上限未検証(🔴)を注記。`schemas/cyberboard-config.schema.json` 反映済み。
+- まとめ(ライティング/per-key の段モデル、display と非対称):
+  公式 UI 作成 = **100/アニメ**(merger combine で超過可)/ 構造 = **256**(1B index)/
+  firmware 再生 = **未検証 🔴**。display は UI300・firmware256(確定)。
+
+---
+
+## 2026-06-22 (続6) — ✅ 256 上限を公式オーサリング設定で最終確認 + スキーマに enforcement
+
+続5 の 256 上限を「自作エンコードの癖では?」の疑いごと潰すため、**純正 AM Master の UI で
+作成した 300 フレーム設定**(`AM CB Index (1).json`)で追試。元アニメ(0〜78)+ 暗転
+(79〜255)の後ろ **256〜299 を赤ベタ `#FF0000` で上書き**して書込(キーマップは merger
+既知正解保持、`frame_num=300`、data_frames=3444、ACK SUCCESS)。
+
+- **実機スロット 1 で赤ブロックは一切出なかった**(ユーザー確認「紫の画面は出なかった」)。
+  = **公式オーサリング設定でも 256 で頭打ち** → 256 上限は firmware 由来で**完全確定**。
+- **3 段モデルを確定**(`experiments/frame-limit-256/README.md` に結論表として記載):
+  firmware 再生 = **256/スロット**(真の上限・8bit カーソル)/ 公式 UI 作成 = 300/スロット
+  (257〜300 は死にフレーム)/ プロトコル・ACK = 実質無制限(`frame_num` 2B=最大 32767、
+  ACK は受理を示すだけ)。
+- **スキーマに 256 を enforcement**(ユーザー指示「schema にも配列の上限数を 256 と」):
+  `schemas/cyberboard-config.schema.json` の `rgbFrameSet`(display + per-key 両用)を
+  `frame_num` `maximum:256` / `frame_data` `maxItems:256` に変更。`lightFrameSet`(spotlight)
+  も類推で 256(🔴 未確認注記付き)。**検証済み**: merger 既知正解(256 未満)は PASS のまま、
+  300 枚設定は全 3 スロットで `frame_num>256` + `frame_data` 超過の両方を検出して FAIL
+  → `cb_verify` が「再生されないフレーム数」を書込前に警告できる。プロトコル上限 32767 は
+  `$comment` に温存(続5 の「enforce は tooling 側」方針を撤回し schema 側で enforce)。
+
+---
+
+## 2026-06-22 (続5) — 🎯 フレーム数の真の上限 = 256(2^8)を実機で確定
+
+ユーザーの一次情報(「純正でも 300 超で書けなかった」=ハードウェア説)を実機実験で検証。
+**数字描画フレーム**手法で「ACK されたフレームが本当に再生されるか」を目視確定。
+
+### 手法(`$CLAUDE_JOB_DIR/tmp/frame_numbers.py`)
+
+- slot1(page5)の各 display フレームに**自分の index を数字で描画**(40×5 LED に 3×5 フォント)。
+  他スロットは最小化。スロットを 0,1,2… と数え上げ、**ループ直前の最大値+1 = 実格納/再生数**。
+- 検証: N=30 → **0–29 で正しくループ**(ACK=実格納、数字も判読可=ピクセル並びも正常)。
+
+### 確定事実 🟢
+
+- **N=400 を書くと ACK SUCCESS だが、再生は 0–255 でループ = 256 枚で頭打ち**。
+  → **真の per-slot 上限は 256(=2^8)。firmware の再生カーソル/index が 8 ビット**。
+  - ACK 経路は 16 ビット(uncertainty の frame_num は 2B、display frame_index も 2B 送出)だが、
+    **firmware 内部が uint8** のため 256 で切る。**ACK ≠ 実格納**の決定的実例。
+  - **merger の `MAX_FRAMES=300` も AM Master の "~300" も不正確**(真値 256 を捉えていない過大マージン)。
+    AM Master の「300 超で書けない」は自前 UI ガードで、我々のツールは迂回送信できるが firmware が 256 で切る。
+- ACK ラダー(gradient): N=400/800/1600 すべて ACK=True(rev[2]==1)。**ACK は上限を示さない**
+  (1600 でも受理)。**唯一の真実は目視**(数字描画)。
+- 大量書込中に**ディスプレイに黄ドット3つ→リブート**の兆候(N=1600 付近)。書込後 `cb_doctor`
+  で **HEALTHY**(キーマップ 94F 健在)。リセットからの復帰=実害なし。ただし巨大 N は避ける。
+
+### per-slot 確定 + 公式 UI 上限 300 判明 🟢
+
+- **256 は per-slot**(実機確定): slot1=200(白数字)+ slot2=200(シアン数字)=合計 400 を書込→
+  **両スロットとも 0–199 完走**。各スロット独立の 8bit index = **per-slot 256**、3 スロット計 ≥768 使える。
+  `tmp/frame_slots.py`。
+- **公式 AM Master の「ドット作成画面」上限 = 300**(ユーザー現地確認)。merger の 300 はこれを写した値。
+- **完全な図式**: 公式エディタは **300 まで作成可**(UI ハードキャップ)/ firmware は **256 で再生ループ**
+  → **257–300 枚目は作れるが永遠に表示されない**(公式エコシステム内在の「作成上限300 vs 再生上限256」
+  不一致)。我々のツールは UI を持たず firmware 直叩きなので **各スロット 256 をフル活用可能**。
+- 残🔴(軽微): 256 超が「未格納」か「再生カーソルのみ 8bit ラップ」かは LED read 経路が無く区別不可
+  (実用上どちらも「使えるのは 256」)。per-key(keyframes)は frame_index 1B 送出=構造上も 256(別途確認)。
+
+### 「我々の符号化バグでは?」を排除(送信バイト実検証)
+
+ユーザー仮説「JSON 側で枚数宣言が抜け/1B 切れしてるのでは」を、生成フレームの実デコードで否定:
+
+- **uncertainty [2,1] は page5/6/7 とも `frame_num=300` を 2B で正しく宣言**(切れなし)。
+- **全 300 フレーム送信**、display `frame_index` も 2B 正確: `256→lo=00 hi=01`, `299→lo=2b hi=01`。
+- = firmware は「300」宣言 + 300 枚の正データを受領した上で **256 しか再生しない** → **我々の符号化は
+  忠実、256 は firmware 内部のバッファ上限**。
+- 傍証: 宣言値を uint8 で読むバグなら `300&0xFF=44` でループのはず。実際は **256 ちょうど** =
+  剰余切り捨てでなく **256 枚バッファへの飽和格納**。
+- プロトコル上、枚数を伝えるフィールドは uncertainty の `frame_num` のみ(他に無い)。公式アプリの
+  送信列(`send_r_series_all`)を忠実再現済み = **公式で 300 枚作っても同 firmware が同 256 でループする**
+  はず(エディタが警告しないだけ。公式 300 枚の全再生は未検証の思い込み)。
+
+### 純正設定の実査(上限フィールド不在を確証)
+
+ユーザー提供の `~/Downloads/AM CB Index.json`(公式 DL)を全ネストキー走査:
+
+- **`max`/`limit`/`capacity`/`buffer` 系フィールドは皆無**。枚数関連は `page_num` / 各ページ
+  `frames.frame_num`・`keyframes.frame_num` / `word_len` / `layer_num` / `*_num` のみ
+  = **我々が既に正しく扱う集合と完全一致**。上限はどこにも JSON 宣言されていない=取りこぼし不可能。
+- このファイルの page5 は `frame_num=300` だったが、**これはユーザーが上限テスト用に公式 UI で
+  300 まで増やした編集物**(工場出荷ではない)。要点は「**公式 UI は 300 まで作成させる**」=
+  作成上限 300 と firmware 再生上限 256 の不一致が UI 側で防がれていないこと。
+- スキーマ検証 pass(`cb_verify.py`)= 我々のスキーマは公式形式(frame_num=300 含む)もカバー。
+- 次検証(ユーザー実施中): 公式 UI で **300 フレーム目に目印**を入れて DL → 我々のツールで書込 →
+  目印が表示されない(=256 超は出ない)ことを公式オーサリング由来の設定で再確認。
+
+### 反映
+
+- `10`(フレーム数上限)/ `schemas/cyberboard-config.schema.json`(frame_num $comment)を **256** で更新。
+
+---
+
+## 2026-06-22 (続4) — doctor(疎通診断)+ JSON Schema(IR 形式化)追加
+
+ツール群を 2 つ拡充。どちらも実機/実データで検証済み。
+
+### `tools/cb_doctor.py` — 非破壊の health チェック(AM Master の泣き所対策)
+
+ユーザー談「最初の1週間 AM Master でまともに書けず泣き寝入り」→ **書かずに疎通だけ確かめる**
+doctor。`30` §6 で特定した AM Master 不安定要因を**そのままチェック項目化**:
+
+- ✓ `cu.usbmodem*` 列挙(0 件→データ非対応ケーブル/未接続を示唆)
+- ✓ `[1,1]` で CyberBoard 同定(ドングルのみ/他デバイスは個別に診断メッセージ)
+- ✓ **排他オープン**(失敗=他アプリ=AM Master がポート占有。書込失敗の筆頭要因)
+- ✓ フレーム往復 CRC-8(双方向)/ ✓ **bulk read-back [6,9] 94 フレーム全 CRC OK**
+  (= 多フレーム転送の健全性 = 書込経路の良好さの強い証拠。ただし書込はしない)
+- 実機: **verdict HEALTHY**(LG モニタ `cu.usbmodemABC...` は正しく無視)。read-only のみ
+  (`[6,17]` reset 等は一切送らない)。
+
+### `schemas/cyberboard-config.schema.json` — 純正/IR 形式の JSON Schema(draft 2020-12)
+
+ユーザー提案「構造が分かるたびスキーマ化=ドキュメント兼用」。`10`/`CyberBoardJson.py`/実データ
+から起こし、**スキーマ検証が実 format の落とし穴を炙り出した**(スキーマ作成の価値そのもの):
+
+- **`"//"` コメントキー**が JSON 内に混在(中国語コメント。`key_layer`/`page_data` 等)→ 許容。
+- **`frame_index` が文字列 `"0"`** のページがある(非能動プレースホルダ。miaomerge の
+  「数値/文字列混在」と一致)→ `numberish`(int|数字文字列)で受ける。
+- **非能動ページの `frame_RGB` プレースホルダが `#0000`**(4hex、正規 #RRGGBB でない)→
+  `frameColor`(緩い hex)で受け、`hexColor`(厳密 #RRGGBB)は color ブロック専用に分離。
+- `valid` は bool/int/数字文字列を許容(`boolOrInt`)。
+- **検証結果**: merger `outputs/*`(1.3.7)+ 旧 `sources/*`(コミュニティ)**全てパス** 🟢。
+- 消費者 `tools/cb_verify.py`: config をスキーマ検証(書込前の事前チェック)。jsonschema
+  未導入でも basic check に graceful 縮退。不正キーコード/範囲外 lightness を検出確認。
+
+### 次にやること
+
+- 棚卸し済み(できること / 未解明)。未解明の優先 = **B2 部分書込**(LED だけ差替が成立するか)
+  → **B5 応答コード** → **B3 物理キー↔matrix index**。実機が繋がっている間に B2 から潰す。
+- それらが固まったらサードパーティツールの仕様確定(言語/パッケージング/独自スキーマ TOML/IR/
+  部分書込方針)。
+
+---
+
+## 2026-06-22 (続3) — 🎉🎉🎉 read 読み戻し発見(キーマップ完全ラウンドトリップ)+ 書込検証手法
+
+「write できるなら read もできるか?」を実機で検証。**firmware は read コマンドに応答する**
+(公式アプリは `cmd_get_*` を未使用=配線なしだが、デバイス側は実装済み)。
+
+### 確定した重大事実(→ `30` §7 反映済み)
+
+- **[6,9] cmd_get_key_msg = キーマップ全体の読み戻し**。応答は **94 フレーム**、
+  `06 09 [chunk_idx] [60B] [crc]` で書込([6,7])と同形。連結 → 4B キーコード列。
+  - **書込→読戻しで 1400/1400 キー完全一致**(7 レイヤ×200、ミスマッチ 0)。末尾に
+    ゼロパディング 10 キー(5640B 返却 vs 5600B 書込=94×60 固定長)。
+  - → **キーマップは write→read→diff の自動検証が可能**(目視不要)。`tools/cb_read.py`。
+  - レイヤ1 は `#00920xxx`(usage page 0x92 = AM 独自/consumer 系 Fn キー)。
+- **[6,15] cmd_get_flash = フラッシュ状態メタのみ**(`06 0f 00 00 05 14 00 00 00 c8...`
+  = 0x0514=1300, 0x00c8=200 等)。**フレームデータのフルダンプではない**。
+- **[6,10] cmd_get_key_macro = 全ゼロ**(マクロ未定義)。
+- **LED フレームの読み戻し経路は未発見**([4,*]/[5,*] の read 変種なし)。
+  → **LED 検証は当面 目視のみ**(下記ベーコン方式)。
+- 注意: **[6,17] は cmd_reset**。get 系([6,9/10/14/15])の隣なので誤送信厳禁。
+  [6,14] get_anykey はキーキャプチャモード懸念で未検証(回避)。
+
+### 書込が「効いた」ことの検証(no-op 曖昧性の排除)
+
+- ユーザー指摘: 現行と同一設定を書いたため「効いたのか無変化か区別不能」。
+- 対策として **ベーコン書込**: `merged_…json` の slot1(page5)を**真緑ベタ塗り(静止1フレーム,
+  display 200px + per-key 90px とも `#00FF00`)** に置換 → `tools/cb_write.py --execute`
+  で書込(2906 フレーム, ACK SUCCESS)。→ **Custom LED スロット1 を緑表示で目視確認**(LED 用)。
+- キーマップ用の完全自動検証は、**別キーマップを書いて [6,9] で読み戻す**ことで
+  no-op 曖昧性を排除可能(未実施。元設定を保持しておき即復元する想定)。
+
+### 成果物
+
+- `tools/cb_read.py` — `keymap` dump / `--json`(key_layer 断片出力)/ `--compare CFG`
+  (config の key_layer と diff)。M2 read の中核。
+
+### 次にやること
+
+- M2: read→IR(JSON)化 + `diff`。キーマップは [6,9] で確立。LED は読み戻し不可のため
+  「書込んだ IR を正」として扱う(or 目視)。
+- LED 読み戻し経路の探索([4,*]/[5,*] や別カテゴリの read 変種、`Central.py` の HID 経路)。
+
+---
+
+## 2026-06-22 (続2) — 🎉🎉 M1 フル設定書き込み成功(実機 R4 / 3826 フレーム)
+
+merger の既知正解 `outputs/merged_20250916_161615.json` を `tools/cb_write.py` で
+**フル書き込み**し、`JSON_END` の ACK(`rev[2]==1`)を取得。M1 の write 経路が
+実機で通った。
+
+### やったこと
+
+- `_re/decompiled/JsonToCmd.py`(chunking/順序)+ `KBSerialOption.send_r_series_all` /
+  `json_down`(送信ループ・総フレーム数の数え方)を精読。`TransJsonCmd` の全 builder
+  バイトレイアウト(uncertainty/page_control/word_page/rgb_frame/key_frame/exchange/
+  swap/key_layer_control/key_layer)+ 補助関数(key/rgb/unicode/rgba/int_to_bytes)を確認。
+- `tools/cb_write.py` を実装(cb_protocol/cb_device を再利用)。**デフォルト dry-run**、
+  `--execute` で実書き込み。送信前後に `[1,1]` product_id プローブ。
+- `merged_20250916_161615.json` を書き込み → **ACK SUCCESS**。
+
+### 確定した重大事実(→ `30`/`40` 反映予定)
+
+- **総フレーム数 = START と END を除く全データフレーム数**。`json_down` は `send_start()`
+  後に `send_cmd_count = 0` リセット → `send_end(send_cmd_count)` に渡す(37105/37111)。
+  END 値は**送信側が実送信数を申告**=自己整合。firmware は受信数と照合(=ドロップ検出。
+  count 不一致は `rev[2]!=1` でリトライ、ブリックではない)。
+- **R系列送信順(実証)**: START → uncertainty[2,1] → page_control[2,2] →
+  word_page[3,1] → rgb_frame[4,pi] → key_frame[5,pi] → exchange[6,1] → swap[6,6] →
+  key_layer_control[6,8] → key_layer[6,7] →(ph_key/car_light は try/except)→ END[1,6]。
+  **fn/macro/tab は R系列順に無い**(§5 注記が確定)。
+- **car_light は本構成では 0 フレーム**: `cmd_send_car_light_info` は空リストで
+  `valid_li[0]` IndexError → `send_r_series_all` の try/except で握り潰し。spotlight 無し
+  構成では送られない(=実機アプリと同挙動)。
+- **デコンパイル由来バグを修復**(忠実移植時の要注意点):
+  - `JsonToCmd` line 105 `if key_frames is not None or ...` は**論理反転**(正: `is None`)。
+  - `page_control_infos` / `word_page_infos` の**内側ループが欠落**(`control_infos=[]`,
+    `word_len=0` で空)。clean な HATSU analog(`get_hatsu_page_control_info`)+ clean builder
+    から再構築:page_control は 4 ページ/フレーム(`ceil(page_num/4)`)、word_page は
+    28 文字/フレーム(`ceil(word_len/28)`)。
+  - `swap_key_infos` の chunking で両分岐が同条件(`== usb_frame_count`)→ 11 件/フレームで再構築。
+  - `get_key_layer_infos` line 314 `None.key_layer.layer_num`(self バインド崩れ)。
+- **フレームプラン実測**(`merged_20250916_161615.json`, page_num=8):
+  uncertainty 1 / page_control 2 / word_page 1(page3 が word_len=28, unicode A-\\) /
+  rgb_frame 2684((66+125+53)×11) / key_frame 1035((42+42+123)×5) / exchange 7
+  (num=0 だが list 7 件=全 #00000000) / swap 1(4 件) / key_layer 95(control 1 + 5600B÷60=94)
+  = **計 3826**。rgb+key=3719 が `90`(2026-06-21)の「3719 USBフレーム規模」と一致。
+- **応答**: `JSON_END` rev = `01 06 01 00...`(echo [1,6], `[2]=1` ACK, CRC `0x81` OK)。
+  書き込み後も `[1,1]`→`CB04` / `AM_CB040.N40.R1.01.50` 応答(デバイス生存)。
+
+### 重要な留保(advisor 指摘)
+
+- **ACK ≠ 描画の正しさ**。CRC 自己整合 + count 一致 + ACK + 生存 が揃っても、
+  系統的なオフセット誤りは「正しい CRC・一致 count・ACK」を出しうる(garbage in, ACK out)。
+  **唯一の ground truth は目視**(page 5/6/7 の Custom LED にアニメが出るか)。
+  → **M1 完了判定は実機 LED の目視確認待ち**。怪しいのは再構築した page_control の
+  フィールド packing と word_page の per-frame word_len(ただし両方ともレビュー済みで一致)。
+
+### 次にやること
+
+- **ユーザーに目視確認依頼**: ディスプレイを Custom LED スロット(1/2/3)へ切替 →
+  アニメが merged 設定通りか。OK なら M1 完全クローズ。
+- 通れば M2(read 読み戻し + diff)、M3(独自スキーマ→IR build)へ。
+
+---
+
 ## 2026-06-22 (続) — 🎉 初の書き込み成功(set_time / ACK 確認)
 
 読み取りに続き、**書き込み経路を実機で実証**。最も安全な `[1,3]` cmd_set_time

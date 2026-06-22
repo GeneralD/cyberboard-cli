@@ -124,11 +124,20 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
    `30`)。残るは**実機キャプチャでの裏取り**のみ。
    - **エンコード部は実データ検証済み**(`_re/verify_encoding.py`)。merger 出力/ソースの
      LED フレームが過不足なく 64B フレーム列へ詰まることを確認(`90` 2026-06-21)。
-2. **M1**: 既知正解(merger `outputs/*.json`)を CLI で**フル書き込み**成功(write 経路検証)。
+2. **M1**: 既知正解(merger `outputs/*.json`)を CLI で**フル書き込み** — ✅✅ **完全達成**
+   (`tools/cb_write.py`, 実機 R4, 3826 フレーム, `JSON_END` rev[2]==1。`90` 2026-06-22 続2)。
+   - **LED 目視確認済み** 🟢: slot1 を緑ベタ塗りに書込→実機で緑表示を確認(no-op 曖昧性も排除)。
+   - **キーマップは自動検証済み** 🟢: write→read([6,9])→diff **1400/1400 一致**(`90` 続3)。
    - **既知正解の妥当性は LED 部について確認済み**(M0 の検証)。`outputs/*.json` を
      write 対象にできる。`sources/*.json` は**旧スキーマ**(`tab_key` 系、`spotlight_frames`/
      `hatsu` 無し)なので、IR は 1.3.7 系(`tab_key_li`/`spotlight_frames`/`HATSU`)を
      基準にしつつ旧形は欠損をデフォルト補完で受ける(`10` IR データモデル参照)。
-3. **M2**: `read` 読み戻し + `diff` 検証。
+   - **`tools/cb_write.py`**: デフォルト dry-run(プラン表示のみ)/ `--execute` で実書き込み。
+     送信順・chunking・総フレーム数は逆コンパイル原典から忠実移植(デコンパイルバグは
+     `90` 続2 の通り修復)。
+3. **M2**: `read` 読み戻し + `diff` 検証 — ✅ **キーマップ達成**(`tools/cb_read.py`:
+   `[6,9]` で 7 レイヤ dump / `--compare CFG` で diff。実機 1400/1400 一致。`90` 続3)。
+   - **LED の読み戻し経路は未発見** 🔴 → LED は「書込んだ IR を正」とするか目視。
+     残課題: LED read 変種の探索([4,*]/[5,*] や別カテゴリ、`Central.py` の HID 経路)。
 4. **M3**: 独自スキーマ → IR の `build`(keymap/LED 分離)。
 5. **M4**: 部分書き込み(LED スロットだけ)+ 堅牢化(接続安定化)。

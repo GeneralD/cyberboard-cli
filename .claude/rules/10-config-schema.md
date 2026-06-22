@@ -134,7 +134,24 @@ JSON の構造。**1 ファイルにキーマップと LED 表示が同居して
 ### マトリクス寸法
 
 - LED ディスプレイ = **40×5 = 200 画素**(merger: `LED_WIDTH=40, LED_HEIGHT=5`)。
-- 最大フレーム数 = **300**(merger: `MAX_FRAMES=300`)。
+- **フレーム数上限 = 256(2^8)** 🟢(実機確定 2026-06-22, `90` 続5)。各 display フレームに
+  index を**数字描画**して目視: N=400 を書くと **ACK は通るが再生は 0–255 でループ=256 枚で頭打ち**。
+  → **firmware の再生 index/カーソルが 8 ビット**。ACK 経路は 16 ビット(`frame_num`・display
+  `frame_index` とも 2B 送出)だが内部 uint8 で切る = **ACK ≠ 実格納**の実例。
+  - **merger `MAX_FRAMES=300` も AM Master の "~300" も不正確**(真値 256 を捉えぬ過大マージン)。
+    AM Master の「300 超で書けない」は自前 UI ガード。我々のツールは迂回送信できるが firmware が 256 で切る。
+    **公式 UI 作成の 300 枚設定でも 256 で頭打ち**(`90` 続6、256〜299 赤マーカーが出ず)。
+  - **per-slot 確定** 🟢(`90` 続5): 2 スロット×各 200 枚=合計 400 でも両方フル再生 →
+    256 は各スロット独立。3 スロット合計 256×3=768 枚使える。
+  - 未確定🔴: 「未格納」か「再生カーソルのみ 8bit ラップ」か(LED read 経路が無く外部から区別不可。
+    実用上はどちらも「使えるのは 256 枚」)。
+  - **ライティング(= per-key `keyframes`)は別系統・別上限** 🟡(`90` 続7): 純正 UI は
+    1 アニメ **100 フレーム**まで(display の 300 とは別)。ただし **100 は UI 作成上限で
+    firmware 上限ではない** — 既知正解は page7 keyframes=123 で ACK 成功(merger combine で超過)。
+    per-key `frame_index` は **1B 送出**=構造上限 256。真の再生上限は未検証🔴(90 キーしか無く
+    数字描画で数えられない)。**schema は 100 を enforce せず 256 維持**(123 の既知正解を弾かぬため)。
+  - **スキーマ enforcement** 🟢(`90` 続6): `schemas/cyberboard-config.schema.json` の
+    `frame_num`=`maximum:256` / `frame_data`=`maxItems:256`。`cb_verify` が 256 超を書込前に弾く。
 
 ## IR データモデル(`CyberBoardJson.py`)🟢
 

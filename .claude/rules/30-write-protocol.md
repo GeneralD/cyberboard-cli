@@ -222,6 +222,23 @@ serial.Serial(com_json, baudrate=9600, timeout=10, write_timeout=1)
 - **応答にも CRC-8 が `[63]` に載る**🟢(poly0x07 で検証 OK)。
 - 実機ログは `_re/probe_product_id.py` / `_re/probe_reads.py` 参照。
 
+### 7a. 読み戻し(read-back)— 設定の吸い出し 🟢(実機確認 2026-06-22)
+
+公式アプリは `cmd_get_*`(`6,9/10/14/15`)を**呼んでいない**(TransJsonCmd に builder は
+あるが KBSerialOption/Central から未配線=デッドコード)。**しかし firmware は応答する**。
+
+- **[6,9] cmd_get_key_msg = キーマップ全体の読み戻し**🟢。応答は **94 フレーム**を連続送出、
+  各 `06 09 [chunk_idx] [60B payload] [crc]`(= 書込 `[6,7]` と同形・同 chunk)。
+  全フレームを `[2]`(chunk_idx)順で連結 → 4B キーコード(`#MMPPUUUU`)列。
+  **書込→読戻しで 7 レイヤ×200=1400 キー完全一致**(末尾ゼロパディング 10 キー、計 94×60=5640B)。
+  → キーマップは **write→read→diff の自動検証が可能**。実装 `tools/cb_read.py`。
+- **[6,15] cmd_get_flash = フラッシュ状態メタのみ**🟢(`06 0f 00 00 05 14 00 00 00 c8…`)。
+  フレームデータのフルダンプ**ではない**。
+- **[6,10] cmd_get_key_macro**: マクロ未定義時は全ゼロ 1 フレーム。
+- **LED フレーム([4,*]/[5,*])の読み戻し経路は未発見**🔴 → LED 検証は当面**目視のみ**。
+- ⚠ **[6,17] は cmd_reset**。get 系の隣なので誤送信厳禁。[6,14] get_anykey は
+  キーキャプチャモード懸念で未検証。
+
 ## 8. 残課題(実機確定が必要)
 
 - ✅ **解決(2026-06-22 実機)**: シリアル疎通 / フレーム形式 / CRC-8 双方向 / product_id=`CB04`
