@@ -1,1 +1,2 @@
 pyserial>=3.5
+jsonschema>=4.0    # optional: cb_verify.py (schema validation); other tools don't need it
