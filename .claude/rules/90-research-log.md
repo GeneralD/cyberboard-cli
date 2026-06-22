@@ -4,6 +4,41 @@
 
 ---
 
+## 2026-06-22 (続13) — M3 着手: keymap.toml v1 設計確定 + R4 別名表を工場出荷 layer0 から生成
+
+keymap.toml v1 仕様を確定(`40` §独自スキーマ案、advisor レビュー反映)し、その内蔵テーブル②
+**R4 別名表(位置の名前空間 ① = 別名↔座標)**を機械生成した。
+
+### keymap.toml v1 設計(要点、`40` に詳細)
+
+- **差分パッチモデル**: `JSON_START` が全消去(部分書込 非対応, 続8)ゆえ build は完全 IR を生成。
+  toml は **base IR への override のみ**。LED は base 由来(読み戻し不可)、keymap は任意で `[6,9]`。
+- **2 名前空間**: ①位置 = 座標 `r{row}c{col}` + 別名 / ②値 = 可読名 + 生 `#MMPPUUUU` passthrough。
+  passthrough を第一級にして**無損失** → `toml→build→IR→write→[6,9]→toml` のラウンドトリップ検証可。
+- **1-indexed** `[layer.1-7]`(配列 index N−1、デフォルト layer1)。
+
+### R4 別名表の生成(🟢 実装・検証済み)
+
+- ユーザーが**真の工場出荷 JSON**(`~/Downloads/AM CB Index.json`、リポ外ローカル)を提供。
+- **リマップ済み config は別名生成に使えない**ことを実証: merged_20250916 は `idx75`=LCtrl
+  (工場は Caps)、`idx125`=Fn2(工場は LCtrl)。**工場出荷 layer0 を正典**にする必要がある。
+- `tools/keymap_alias.py`: `(usage page, usage id) → 可読別名`表(0x07/0x0C/0x92)を工場 layer0 に
+  適用 → **81 別名**(物理キー 81 と一致、衝突 0)を `presets/r4-keymap-aliases.json` へ生成。
+- **別名は「機能」でアンカー**(物理位置でない)ので最下段でも正しい: `lctrl→r5c0`(idx125)は
+  物理「左から五番目」だが機能で確定、`space→r5c6`, `fn→r5c10`(Fn2), `rctrl→r5c11`, 矢印 r5c12-14。
+  → 続12 の「最下段 matrix 列≠物理位置」問題を**別名が吸収**(座標直書きだけが唯一の落とし穴)。
+- `resolve_position(token)`: 座標 `r\d+c\d+` 優先 → 別名表。range チェック + 不正入力で raise。
+  自己テスト: 81 別名の round-trip / 座標優先 / 工場 layer0 の occupied 集合と一致 / bad input 全 raise。
+- 生成物(別名表)は**自作のレイアウト導出=コミット可**(README grid と同性質)。工場 config 自体は
+  著作物ゆえ非コミット(リポ外)。
+
+### 次
+
+- ②値の名前空間の resolver(可読名 ↔ `#MMPPUUUU`。`decode_keymap.py` の逆引き + 0x92 ラベル)。
+- `build`(base IR + keymap.toml override → 完全 IR)本体。ラウンドトリップ検証を成立条件に。
+
+---
+
 ## 2026-06-22 (続12) — ⚠ 訂正: 0x92 名は「内部定数」でなく「UI 表示ラベル」が正 + 特別キーは黒箱
 
 続11 で 0x92 名を `app.js` の `r1/r2` 表から取ったが、それは**内部定数テーブル**(レガシー名

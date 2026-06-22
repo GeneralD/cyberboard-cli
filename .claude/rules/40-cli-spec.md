@@ -113,6 +113,11 @@ r5c0  = "#00920C0F"        # 生パススルー(= Layer1。未解読コードも
 - swap/exchange/macro/fn_key の値も **②値の名前空間**(可読名 or `#…`)で書く。
 - 内蔵テーブル: 可読名 ↔ `#MMPPUUUU`(`10` / `decode_keymap.py` の HID07/HID0C + 0x92 ラベル)、
   別名 ↔ 座標(R4 プリセット。layer0 デコードから生成、最下段は要押し試験 🔴)。
+- **別名表 = 実装済み 🟢**(2026-06-22, `90` 続13): `presets/r4-keymap-aliases.json`(81 別名)+
+  生成器 `tools/keymap_alias.py`。**工場出荷 config の layer0 から機械生成**(merged 等のリマップ済み
+  config は不可 — `idx75` が Caps でなく LCtrl になる等)。別名は**機能でアンカー**するので最下段でも
+  正しい(例 `lctrl→r5c0`=idx125 は物理 5 番目だが機能で確定)。`resolve_position(token)` =
+  座標 `r\d+c\d+` 優先 → 別名表。座標→index・範囲チェック・round-trip 自己テスト済み。
 
 #### ラウンドトリップ検証(無損失スキーマの副産物)
 
