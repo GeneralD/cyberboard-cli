@@ -8,7 +8,7 @@
     {
       "name": "cyberboard",
       "source": "./plugins/cyberboard",
-      "description": "Configure the CyberBoard R4 (keymap + LED) over USB without AM Master. Bundles the cyberboard-mcp server."
+      "description": "Configure the CyberBoard R4 (keymap + LED) over USB without AM Master. Wires up the cyberboard-mcp server (requires: pip install 'cyberboard-cli[mcp]')."
     }
   ]
 }
