@@ -25,11 +25,14 @@ dependencies = ["pyserial>=3.5"]
 led = ["pillow>=10.0"]
 # Strict schema validation in `verify` (degrades to basic checks without it).
 verify = ["jsonschema>=4.0"]
+# MCP server (cyberboard-mcp) exposing the CLI's operations as MCP tools.
+mcp = ["mcp>=1.2"]
 # Everything.
-all = ["pillow>=10.0", "jsonschema>=4.0"]
+all = ["pillow>=10.0", "jsonschema>=4.0", "mcp>=1.2"]
 
 [project.scripts]
 cyberboard = "cyberboard.cli:main"
+cyberboard-mcp = "cyberboard.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/GeneralD/cyberboard-cli"
