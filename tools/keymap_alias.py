@@ -23,39 +23,16 @@ import json
 import re
 from pathlib import Path
 
+from keycode import STD_NAMES
+
 COLS, ROWS = 25, 8
 _COORD_RE = re.compile(r"^r(\d+)c(\d+)$")
 
-# --- (usage page, usage id) -> friendly alias (TOML-bare-key safe: [A-Za-z0-9_-]) ---
-# Page 0x07 (keyboard/keypad)
-_ALIAS_07: dict[int, str] = {0x04 + i: c for i, c in enumerate("abcdefghijklmnopqrstuvwxyz")}
-_ALIAS_07.update({0x1E + i: str((i + 1) % 10) for i in range(10)})  # 1..9,0
-_ALIAS_07.update({0x3A + i: f"f{i + 1}" for i in range(12)})         # f1..f12
-_ALIAS_07.update({
-    0x28: "enter", 0x29: "esc", 0x2A: "backspace", 0x2B: "tab", 0x2C: "space",
-    0x2D: "minus", 0x2E: "equal", 0x2F: "lbracket", 0x30: "rbracket", 0x31: "backslash",
-    0x33: "semicolon", 0x34: "quote", 0x35: "grave", 0x36: "comma", 0x37: "period",
-    0x38: "slash", 0x39: "caps", 0x46: "printscreen", 0x47: "scrolllock", 0x48: "pause",
-    0x49: "insert", 0x4A: "home", 0x4B: "pageup", 0x4C: "delete", 0x4D: "end",
-    0x4E: "pagedown", 0x4F: "right", 0x50: "left", 0x51: "down", 0x52: "up",
-    0x53: "numlock", 0x65: "app",
-    0xE0: "lctrl", 0xE1: "lshift", 0xE2: "lalt", 0xE3: "lgui",
-    0xE4: "rctrl", 0xE5: "rshift", 0xE6: "ralt", 0xE7: "rgui",
-})
-# Page 0x0C (consumer / media)
-_ALIAS_0C: dict[int, str] = {
-    0xB5: "next", 0xB6: "prev", 0xB7: "stop", 0xCD: "play", 0xE2: "mute",
-    0xE9: "volup", 0xEA: "voldown", 0x70: "brightup", 0x6F: "brightdown",
-}
-# Page 0x92 (AM vendor) — only the factory Fn key gets a positional alias; the rest are
-# undecoded vendor functions, left to coordinate/passthrough (black-box, 90 続12).
-_ALIAS_92: dict[int, str] = {0x0C0B: "fn"}  # #00920C0B = Fn2 = the physical Fn key
-
-ALIAS_NAMES: dict[tuple[int, int], str] = {
-    **{(0x07, u): a for u, a in _ALIAS_07.items()},
-    **{(0x0C, u): a for u, a in _ALIAS_0C.items()},
-    **{(0x92, u): a for u, a in _ALIAS_92.items()},
-}
+# Positions reuse the value vocabulary (STD_NAMES) for standard keys, so "the a key"
+# (alias) and "emits a" (value) share one name. The one position-specific name: the
+# physical Fn key is `fn` (its factory function is Fn2 = #00920C0B); the rest of page
+# 0x92 has no positional alias and falls back to coordinate (black-box, 90 続12).
+ALIAS_NAMES: dict[tuple[int, int], str] = {**STD_NAMES, (0x92, 0x0C0B): "fn"}
 
 
 def _coord(index: int) -> str:
