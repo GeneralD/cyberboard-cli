@@ -45,29 +45,81 @@
 
 ## 独自スキーマ案
 
-### キーマップ `keymap.toml`(例)
+### キーマップ `keymap.toml`(v1 仕様)
+
+> 設計確定 2026-06-22。advisor レビュー反映。`90` 続10-12 / `experiments/keymap-matrix/` が裏付け。
+
+#### モデル: toml は **完全な base への差分パッチ**(全置換は build 側で吸収)
+
+`JSON_START` が設定フラッシュを全消去する(部分書込 非対応, 続8)以上、**`build` は必ず
+完全な IR を生成**しなければならない(200×7 全位置 + LED 全ページ + swap/exchange/macro)。
+よって **keymap.toml は「base IR に対する上書き(差分)」だけを持つ**:
+
+```text
+build = base IR(完全・必須) + keymap.toml の override → 完全 IR → フル書込
+```
+
+- **base は完全 IR 設定ファイルが必須**(`outputs/*.json` 等)。LED はここから引き継ぐ
+  (または別の `led.toml` ソースから合成)。**LED は読み戻せない**ので base 無しに device
+  だけからフル設定は再構成できない(キーマップは `[6,9]` で読めるので任意で base へ反映可)。
+- 省略したレイヤ/位置/機能は **base のまま不変**(差分のみ適用)。
+
+#### 2 つの名前空間(位置 と 値 を分離)
+
+**① 位置(`[layer.N]` テーブルのキー側)** — 「どの物理キーか」:
+
+- **座標 `r{row}c{col}`**(row 0-7, col 0-24)。matrix index = `row*25 + col`。
+  ⚠ これは **matrix 座標であって物理位置ではない**(英字段は一致するが最下段 row5 はズレる, 続12)。
+- **別名(alias)**: R4 プリセット別名表の可読名(`esc` / `a` / `space` …)。alias → 座標 → index。
+  別名は**参照 layer0 の機能に紐づく**ため、物理位置が未確定な最下段でも頑健。
+- 解決順: **まず座標パターン `r\d+c\d+` を試し**、ヒットしなければ別名表を引く。
+  → 座標直書き `r5c0` は「物理 左から1番目」と勘違いしやすい唯一の落とし穴(別名なら安全)。
+
+**② 値(`=` の右側)** — 「そのキーが何を出すか」:
+
+- **可読名**: HID page 0x07(`A`/`Esc`/`Tab`…)∪ 0x0C(`Vol+`/`Play`…)∪ 0x92 ラベル
+  (`Fn2`/`Layer3`/`BT1`…, `_re/keycode_labels.json` 由来)。
+- **生パススルー `#MMPPUUUU`**(8 hex リテラル)を**第一級の値**とする。未解読の 0x92 /
+  MM 修飾ビット / tab_key / 名前の付かないコードを**そのまま無損失で表現**できる
+  = device dump とラウンドトリップ可能(下記)。0x92 は CLI が解釈せず passthrough(続12 方針)。
+- 空き = 省略(base 維持)or 明示クリア `"."` / `"#00000000"`。
+
+#### レイヤは **1-indexed**(`[layer.1]`〜`[layer.7]`)
+
+公式 UI と同じ layer1-7。内部の配列 index は N−1。**デフォルトは layer1**(続11)。
 
 ```toml
 [meta]
 product = "R4"
-layers = 7
+base = "outputs/merged_20250916_161615.json"  # 完全 IR base(必須)
+# refresh_keymap_from_device = true           # 任意: [6,9] で実機 keymap を base に反映
 
-# 物理キー名 → HID キー(レイヤ0)。#MMPPUUUU ではなく人間可読名で書ける
-[layer.0]
-esc = "Esc"
-a = "A"
-caps = "LCtrl"          # リマップ例
+[layer.1]                  # = 配列 index 0 = デフォルトレイヤ
+esc   = "Esc"              # 別名 → r0c0 → idx0
+a     = "A"
+r3c0  = "LCtrl"            # 座標直書き(LCtrl を idx75 へ)
+space = "Spc"
 
-[layer.1]                # Fn レイヤ
-f1 = "BrightnessDown"
+[layer.2]
+f1    = "Fn2"              # 0x92 ラベルも値に書ける
+r5c0  = "#00920C0F"        # 生パススルー(= Layer1。未解読コードもこう書ける)
 
-[[fn_key]]   input = "P"  out = "Up"
-[[swap_key]] input = "A"  out = "B"
-[[macro]]    input = "M"  out = ["H","I"]  interval_ms = [0, 100]
+[[swap_key]]   input = "A"  out = "B"
+[[exchange_key]] input = ["A","B"]  out = ["B","A"]
+[[macro]]      input = "M"  out = ["H","I"]  interval_ms = [0, 100]
+[[fn_key]]     input = "P"  out = "Up"
 ```
 
-- 人間可読キー名 ↔ HID コード `#MMPPUUUU` の**変換テーブル**を内蔵(`10` 参照)。
-- 物理キー名 ↔ 行列 index(25×8=200)の**R4 レイアウトマップ**が必要(要作成 🔴)。
+- swap/exchange/macro/fn_key の値も **②値の名前空間**(可読名 or `#…`)で書く。
+- 内蔵テーブル: 可読名 ↔ `#MMPPUUUU`(`10` / `decode_keymap.py` の HID07/HID0C + 0x92 ラベル)、
+  別名 ↔ 座標(R4 プリセット。layer0 デコードから生成、最下段は要押し試験 🔴)。
+
+#### ラウンドトリップ検証(無損失スキーマの副産物)
+
+生パススルー(②)で**スキーマが無損失**なら、
+`toml → build → IR → write → [6,9] read → de-build → toml` が**差分ゼロ**になるはず。
+既に実証済みの「write→read→diff 1400/1400」(M2)を**1 段上へ持ち上げた検証**になる。
+→ スキーマ設計時点でこのラウンドトリップを成立条件にする(= 生パススルーが必須になる根拠)。
 
 ### LED `led.toml`(例)
 
@@ -152,4 +204,10 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
    - **LED の読み戻し経路は未発見** 🔴 → LED は「書込んだ IR を正」とするか目視。
      残課題: LED read 変種の探索([4,*]/[5,*] や別カテゴリ、`Central.py` の HID 経路)。
 4. **M3**: 独自スキーマ → IR の `build`(keymap/LED 分離)。
-5. **M4**: 部分書き込み(LED スロットだけ)+ 堅牢化(接続安定化)。
+   - **keymap.toml v1 仕様 確定**(2026-06-22, 本書 §独自スキーマ案)。base IR への差分パッチ /
+     位置(座標 `r{row}c{col}` + R4 別名)と値(可読名 + 生 `#MMPPUUUU` passthrough)の 2 名前空間 /
+     1-indexed `[layer.1-7]` / 無損失=ラウンドトリップ検証可。**実装はこれから**。
+   - 必要な内蔵テーブル: 可読名↔`#MMPPUUUU`(`decode_keymap.py` 既存)+ R4 別名↔座標
+     (layer0 デコードから生成。最下段 row5 の物理対応は要押し試験 🔴)。
+5. **M4**: 堅牢化(接続安定化)。部分書込は firmware 非対応(続8)のため不要 —
+   分離管理は「read→merge→フル書込」で M3 build が吸収する。
