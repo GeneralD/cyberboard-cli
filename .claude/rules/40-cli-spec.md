@@ -260,11 +260,13 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
   `tools/cb_protocol.py`)。実機 R4 で動作確認済み(`90` 2026-06-22)。
   `list`/`info --json` を持ち、これをそのまま CLI サブコマンドへ昇格できる。
   プロジェクトローカル skill = [`cyberboard-device`](../skills/cyberboard-device/SKILL.md)。
-- **ユーザー向け対話 LED 作成 skill = プラグイン側 🟢**(`90` 続24, issue #2):
+- **ユーザー向け対話 LED 作成 skill = プラグイン側 🟢**(`90` 続24 / 続27, issue #2 / #6 後半):
   `plugins/cyberboard/skills/cyberboard-led/SKILL.md`。`cyberboard anim/led/write` を
   オーケストレーションし AskUserQuestion で slot/効果を選ばせ preview 反復→明示確認→書込。
   プラグインは cache コピーされ repo 非参照ゆえ効果カタログ/例を**自己完結 inline**。
   preview は GIF ベース(`led play` は非 TTY で 1 枚=ユーザー端末向け)。base IR は利用者が export。
+  **続27 で全効果デザイナー化**: text/模様/sprite 全部 + **おまかせデザイン vision ループ**
+  (`anim montage` を Read→falsifiable 基準で自己批評→改訂)。sprite の絵は手持ち/AI 生成/PIL を毎回選択。
 - `write` は段階的に: 接続確立 → (必要なら read で現状退避) → 送信 → **read で検証**。
 - `--dry-run` は実送信せずチャンク列を表示。
 - 堅牢化(`30` §6): 列挙条件の厳密化(usage/経路)+ 明示リトライ + 各段で読み戻し検証。
@@ -349,6 +351,15 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
    - **per-key(keyframes)GIF は未対応** 🔴: web 抽出の物理配置はあるが(`experiments/perkey-layout/`
      83 LED + `render_tui.py`)、**web-index ↔ keyframes-90 の対応が未確定**(export 相関パス要)。
      display は 1:1 マップ既知なので今すぐ可、per-key だけがこのマップ待ち。
-   - 🔴 残: **LED デザイン vision ループ agent**(#6 後半・別 PR: prompt→sprite 生成→render/ir2gif→
-     vision で目視批評→改訂。sprite ソース=画像/AI 生成の設計フォーク有り。plugin skill `cyberboard-led`
-     の効果カタログへ sprite 追加もこの PR で)/ `led.toml` マニフェスト(複数ソース合成)/ TUI エディタ。
+   - **LED デザイン vision ループ 達成**(`plugins/cyberboard/skills/cyberboard-led/SKILL.md`, `90` 続27,
+     issue #6 後半): **おまかせデザイン** = エージェントが `anim montage` を Read して**falsifiable な
+     ファミリー別基準で自己批評**(全: 巻き戻り 1px か段差か / text: 40px 可読性・グリフ 5px 内 / 模様:
+     wrap=frame0・バンディング / sprite: 縮小で判別可・`gap>=5`・256 切れ)→改訂 2〜3 周→GIF+montage 提示→
+     明示確認→書込。**全効果デザイナー**(text/模様/sprite 全部)。新規 CLI コードなし(既存 `anim`/`led`/
+     `write` をオーケストレーション)。skill 367 行(400 制限内 = inline、超過なら `plugins/cyberboard/agents/`
+     へ抽出)。sprite を効果カタログ + 「何を作る?」へ追加、**2b** で絵の用意(手持ち / AI 生成=Codex 可用時のみ
+     40px 粗化明示 / PIL 手続き)を**毎回選ばせる**。dogfood 実証: `#330033` 暗紫が legibility 基準で落ち→
+     `#cc44ff` で通過 = ループ収束(rubber-stamp せず)。
+   - 🔴 残: **judge-panel 並列(v2)**(N パラメータ変種を montage→vision で選抜 → ultracode 並列。
+     その時ループを `plugins/cyberboard/agents/` の forked subagent へ抽出)/ `led.toml` マニフェスト
+     (複数ソース合成)/ TUI エディタ。

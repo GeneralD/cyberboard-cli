@@ -81,6 +81,20 @@ as something *they* can run at their own terminal if they want to watch it live:
 `cyberboard led play -i preview.gif` (Ctrl-C to stop). Don't wire it into the
 skill's own render loop.
 
+## To judge motion yourself, use `montage` (a GIF Reads as one still frame)
+
+When **you** need to *evaluate* an animation (the おまかせ vision loop, 3b), a GIF
+is useless: the Read tool shows only its **first frame**. Render a **montage** —
+frames tiled top-to-bottom, time going downward — and Read that:
+
+```sh
+cyberboard anim montage -r recipe.json -o sheet.png   # tall PNG; then Read it
+```
+
+It appends a wrap-seam pair `[last, first]` under an orange band, so you can see
+whether the loop closes cleanly. **montage = for you to judge; GIF = to show the
+user** (they can open it animated, or run `led play` themselves).
+
 ## Steps
 
 ### 1. Choose slot + what to make (AskUserQuestion)
@@ -91,7 +105,14 @@ Ask, in Japanese, two things (one question each, or combined):
 - **何を作る?**
   - **テキスト横スクロール** — 文字を流す(`text_scroll`)
   - **模様マーキー** — 虹サイクル / ストライプ / グラデ流し(`hue_cycle` / `stripes` / `gradient_scroll`)
+  - **キャラ / 絵を縦に流す** — スプライト画像を 40px 幅で縦スクロール(`sprite`)
   - **GIF を取り込む** — 手持ちの GIF を 40×5 に取り込む(`led gif2ir`)
+
+  **効果ファミリーは意図から先に決める** — 文字なら `text_scroll`、模様なら
+  marquee 系、絵 / キャラなら `sprite`。ユーザーが細かいパラメータでなく
+  「いい感じに」「ネオンっぽく」のような**雰囲気**で頼んだら、ファミリーだけ決めて
+  **手順 3b のおまかせデザイン(vision ループ)**で詰める。画像 / AI 生成の確認は
+  **`sprite` を選んだときだけ**(手順 2b)— テキストや模様では尋ねない。
 
 ### 2. Gather per-effect parameters (Japanese dialogue)
 
@@ -103,6 +124,23 @@ surfacing explicitly:
   画面外まで流して間を空けたいなら `gap: 40`。
 - **長さ / なめらかさ** → `step` を小さく(=長い・なめらか)。`solid` の `frames`。
 - **速度** → `speed_ms`(1 フレームの表示 ms)。
+
+### 2b. Prepare the sprite artwork (`sprite` only)
+
+`sprite` scrolls an external picture fitted to 40-px wide. **Ask, every time,
+how to get the art (AskUserQuestion — don't decide silently):**
+
+- **手持ちの画像を使う** — user gives a path (PNG / GIF …). Most reliable.
+- **AI に生成させる** — make a picture with the `image-generator` agent
+  (Codex / gpt-image-2). ⚠ **state up front that it shrinks to 40-px wide so
+  fine detail gets coarse**, then let them choose. **Offer this option only when
+  Codex is available and ChatGPT-logged-in** (not API-key mode); if it's
+  unavailable, omit the option entirely — don't surface a dead choice.
+- **PIL で手続き的に描く** — draw a simple shape / icon with Pillow. Works
+  anywhere `[led]` is installed (Pillow is already a dependency), and 40-px-friendly.
+
+Whatever produces the art, feed it to a `sprite` recipe and confirm how it
+**looks at 40 px** in the **3b vision loop** below.
 
 ### 3. Preview → iterate
 
@@ -117,6 +155,33 @@ recipe を直して再プレビュー。**GIF 取込は base が必須**(`gif2ir
 なので、この段階ではまず手元の元 GIF をそのまま見せて確認し、40×5 へ変換した
 正確な preview は **手順 4 で base を入手した後**に `led gif2ir` の出力 IR を
 `cyberboard led ir2gif -i config.json --slot N -o preview.gif` で GIF 化して見せる。
+
+### 3b. おまかせデザイン(vision ループ)
+
+When the user delegates the look ("いい感じに" / a vibe rather than exact knobs),
+**you iterate by looking at a montage and self-critiquing, 2–3 rounds**, before
+showing the user. (A GIF Reads as one still frame — judge with `montage`, above.)
+
+1. Build a recipe from the intent (the effect family is fixed in step 1).
+2. `cyberboard anim montage -r recipe.json -o sheet.png` → **Read `sheet.png`.**
+3. **Critique against falsifiable criteria — each one can *fail*; "looks fine"
+   is not a verdict.** Fix whatever fails, then go back to 2.
+
+   - **All families (loop):** does the wrap pair `[last, first]` under the orange
+     band continue cleanly (a 1-px step), or is there a jump / step?
+   - **`text_scroll`:** is the text **legible at 40 px** — is `fg`↔`bg` contrast
+     enough? *(A dark colour on black fails: e.g. `#330033` on black is unreadable;
+     `#cc44ff` on black passes.)* Are glyphs inside 5 px (no clipped descenders)?
+   - **patterns (`hue_cycle` / `stripes` / `gradient_scroll`):** does the wrap
+     frame truly match frame 0 (no visible seam band)? Any colour banding?
+   - **`sprite`:** is the subject still recognizable after the 40-px width-fit
+     (not mush)? Is the loop blank→blank (`gap >= 5`), not edge→edge? Did 256-frame
+     truncation cut the art's bottom (if so, raise `step`)?
+4. Converge in **2–3 rounds**. Then **`SendUserFile` the GIF + the montage** and
+   ask 「これで書き込みますか?」 → on a clear yes, continue to step 4 (base) on.
+
+> If every round self-rates "OK", the criteria aren't doing their job. They are
+> meant to *fail* — that's how the loop improves instead of rubber-stamping.
 
 ### 4. Prepare a complete base IR (mandatory)
 
@@ -230,6 +295,26 @@ period = `len(colors) × band_width` → tiles seamlessly.
 | `slant` | 0 | diagonal gradient (x-shift per row) |
 | `direction` | `left` | `left` / `right` |
 
+### `sprite` — scroll a picture/character vertically (needs artwork)
+
+Fits a tall sprite image to **40 px wide** (height kept proportional) and scrolls
+a **5-px window** down it. Unlike the procedural effects it **loads an external
+image** (animated GIF → first frame). See **2b** for how to get the art.
+
+| key | default | meaning |
+|---|---|---|
+| `sprite` | (required) | image path (CWD-relative; PNG / GIF …). Scaled to 40-px wide, height proportional (≥5 px) |
+| `step` | 1 | px moved per frame — smaller = smoother & longer |
+| `gap` | 0 | trailing blank rows. **A clean loop wants `>= 5`** (scroll the art fully off to `bg`, then back). `0` only tiles cleanly if the art tiles vertically |
+| `direction` | `up` | `up` (content rises) / `down` |
+| `bg` | `#000000` | colour of the `gap` rows |
+| `resample` | `nearest` | width-fit interpolation: `nearest` (pixel-art) / `box` / `lanczos` |
+
+> **The seam rule is the reverse of `text_scroll`.** For arbitrary art `gap:0`
+> joins top and bottom edges → a jump on non-tiling art. A tall sprite with small
+> `step` easily passes 256 frames → the CLI warns and truncates (the art's bottom
+> never shows); raise `step` to fit.
+
 ## Recipe examples (small, inline)
 
 Seamless scrolling text (slot 1) — single effect, params flat:
@@ -264,6 +349,12 @@ Rainbow that spans the panel and flows left (`hue_cycle`):
 
 ```json
 { "slot": 3, "speed_ms": 60, "effect": "hue_cycle", "cycle_frames": 90, "spread": 360 }
+```
+
+A character scrolling up (slot 1) — needs an image; clean loop via `gap`:
+
+```json
+{ "slot": 1, "speed_ms": 70, "effect": "sprite", "sprite": "char.png", "gap": 6, "direction": "up" }
 ```
 
 ## Notes
