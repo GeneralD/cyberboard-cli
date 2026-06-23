@@ -4,6 +4,70 @@
 
 ---
 
+## 2026-06-23 (続23) — 製品化 #3: Claude Code プラグイン scaffold(PR #13 merged)
+
+issue #3。CLI を Claude Code プラグインとして配布する scaffold(MCP のみ)。`90` 続21 の
+`cyberboard-mcp` を同梱配線。
+
+### 構成
+
++ `plugins/cyberboard/.claude-plugin/plugin.json` — `mcpServers` で `cyberboard-mcp` を inline 宣言。
+  **schemastore の `claude-code-plugin-manifest` スキーマで検証**(`uv run --with jsonschema`)。
+  `$schema` 付き。**`version` は省略** → SHA ベース自動更新(#2 でスキル追加時の bump 忘れ回避、advisor 指摘)。
++ `.claude-plugin/marketplace.json` — 単一リポ marketplace。相対 `source: ./plugins/cyberboard`。
+  **marketplace 用スキーマは存在しない(URL 404)ため `$schema` 無し**(config-practices の例外)。
++ install: `pip install 'cyberboard-cli[mcp]'`(console script を PATH へ)→ `/plugin marketplace add
+  GeneralD/cyberboard-cli` → `/plugin install cyberboard@cyberboard-cli`。skill は `plugins/cyberboard/
+  skills/<name>/SKILL.md` 自動検出(マニフェスト追記不要)なので #2 はこの上に乗るだけ。
+
+### レビュー(Copilot 4 件、全採用)
+
++ README の `sh` フェンスに `/plugin …`(Claude Code コマンド)混在 → シェル(pip)と `text`(/plugin)に分割。
++ 前提条件の文を条件節へ書き換え(pip install 前に有効化すると MCP 起動失敗)。
++ plugin.json / marketplace.json の説明「Bundles」が過大 → 「Wires up …(別途 pip install 要)」へ(advisor の
+  「過大評価するな」と同趣旨)。CodeRabbit SUCCESS、新規指摘なし → squash-merge + delete-branch。
+
+### 留保(正直な範囲)
+
++ schema 検証は**整形式性**の確認で、**実ロード/MCP 起動**の保証ではない。`claude plugin` に非対話 validate は無い
+  (details/enable/install/marketplace のみ)。live `/plugin marketplace add` は相対 source が git 経由でしか
+  解決されないため **main merge 後でないとテスト不可** → PR 本文に明記して merge。
+
+## 2026-06-23 (続22) — 🎉 製品化 #12: LED アニメをターミナルで再生(`cb_led play`、半角ブロック)
+
+issue #12。LED アニメ(40×5)を GIF ビューア無しで**端末から直接再生**。CLI コア(#5 merged)の上の
+純粋表示機能(デバイス I/O 無し)。`experiments/perkey-layout/render_tui.py` の truecolor ANSI を
+半角上ブロック化したもの。
+
+### 実装(`tools/cb_led.py` に `play` サブコマンド追加)
+
++ **半角上ブロック `▀`(U+2580)**で truecolor 描画: **fg=上ピクセル / bg=下ピクセル** → 1 テキスト行=縦 2px。
+  5px = **3 テキスト行**(最下行は上半分=5 行目のみ、下半分=端末既定背景 `49m`)。横 40px = **40 文字**。
+  = `.config` statusline と同型の塗り分けで 40×5 グリッドをそのまま端末に表現。
++ **入力 2 系統**: GIF(`-i art.gif`、`_gif_frames` 再利用、pillow 要)/ IR config(`-i cfg.json --slot N`、
+  ir2gif と同じ frame 抽出、**pillow 不要**=core-only で動く)。`--slot` 有無で分岐。
++ **再生**: TTY ではカーソルを毎フレーム `ESC[3A` で巻き戻しインプレース描画。`ESC[?25l/?25h` で
+  カーソル隠し/復元(`Ctrl-C` も finally で必ず復元)。ノブ `--once`/`--loop N`(既定=無限)/`--fps`/
+  `--speed-ms`/`--scale`(横複製)/`--resample`。`speed_ms`(IR)or GIF duration でフレーム送り。
++ **縮退**: 非 TTY(パイプ)は 1 フレーム静止 + 警告。COLORTERM≠truecolor は警告のみ(capable 端末を
+  誤って潰さない best-effort)。単一フレーム config は静止表示。**256 cap 準拠**(超過は drop 警告)。
++ `cyberboard/cli.py` の `led` help を更新(gif2ir / ir2gif / **play** / recipe)。
+
+### 検証 🟢
+
++ **pty で TTY 経路を実証**: `ESC[?25l`/`ESC[?25h`/`ESC[3A` 出力 + `--once` で正常終了(exit 0)を確認。
++ GIF/IR 両入力で 3 行 × 40 セル、最下行 `49m`、`▀`=UTF-8 E2 96 80 を確認。`--scale 2`=80 ブロック/行。
++ 256 cap 警告 / エラー系(slot 範囲・scale≥1・frame px 数)/ IR slot が pillow 無し `uv run` で動作。find-debug クリーン。
++ ⚠ `except KeyboardInterrupt: pass` に swallowed-error warning が出るが、Ctrl-C で再生停止する意図的
+  idiom(finally で復元)= warning 容認(error でなくコミット非ブロック)。
+
+### 対象外 / 次
+
++ per-key(`keyframes` 90)は web↔keyframes index マップ未確定(続15)のため display(40×5)のみ対象。
++ 将来 `anim play`(レシピ直再生)への拡張余地。LED デザイン agent(#6)の vision ループは GIF/端末両方で回せる。
+
+---
+
 ## 2026-06-23 (続21) — 製品化 #4: MCP サーバ(`cyberboard-mcp`、CLI を subprocess で wrap)
 
 issue #4。CLI の操作を MCP tool として公開。**CLI がコア**の方針通り、各 tool は
