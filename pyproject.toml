@@ -13,8 +13,15 @@ authors = [{ name = "GeneralD" }]
 keywords = ["cyberboard", "angrymiao", "keyboard", "keymap", "led", "cli"]
 classifiers = [
     "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Hardware",
     "Topic :: Utilities",
 ]
 # Device I/O is the core purpose, so pyserial is a hard dependency.
@@ -37,6 +44,7 @@ cyberboard-mcp = "cyberboard.mcp_server:main"
 [project.urls]
 Homepage = "https://github.com/GeneralD/cyberboard-cli"
 Repository = "https://github.com/GeneralD/cyberboard-cli"
+Issues = "https://github.com/GeneralD/cyberboard-cli/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["cyberboard"]
