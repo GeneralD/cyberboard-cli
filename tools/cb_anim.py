@@ -296,9 +296,9 @@ def _load_sprite(seg: dict) -> list[list[str]]:
         raise SystemExit(f"cb_anim: sprite resample must be one of {sorted(modes)}, "
                          f"got {resample!r}")
     try:
-        im = Image.open(src)
-        im.seek(0)  # first frame of an animated GIF
-        rgb = im.convert("RGB")
+        with Image.open(src) as im:  # context manager so the file handle isn't leaked
+            im.seek(0)  # first frame of an animated GIF
+            rgb = im.convert("RGB")  # independent copy — safe to use after the file closes
     except OSError as e:
         raise SystemExit(f"cb_anim: cannot read sprite {src} as an image: {e}")
     ow, oh = rgb.size
@@ -335,7 +335,8 @@ def _effect_sprite(seg: dict) -> list[list[str]]:
         _warn(f"sprite: scroll height {total} not divisible by step {step} — loop may jitter")
     if nframes > MAX_FRAMES:
         _warn(f"sprite: {n_rows}px-tall sprite at step {step} needs {nframes} frames > "
-              f"{MAX_FRAMES}/slot — the bottom of the sprite will be cut off; raise `step`")
+              f"{MAX_FRAMES}/slot — the scroll is truncated before it loops (later frames "
+              f"dropped); raise `step` to fit")
     sign = 1 if direction == "up" else -1  # up = content rises (window offset increases)
     frames: list[list[str]] = []
     for i in range(nframes):
