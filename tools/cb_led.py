@@ -118,6 +118,61 @@ def frames_to_gif(frames: list[list[str]], output: str, scale: int = 16,
     return len(imgs)
 
 
+def frames_to_montage(frames: list[list[str]], output: str, scale: int = 8,
+                      max_rows: int = 24, seam: bool = True) -> dict:
+    """Tile `frames` into one tall PNG — time goes downward — to inspect motion.
+
+    A GIF renders as a still in many viewers (the Read tool shows only the first
+    frame), so a recipe's motion / loop / seam can't be judged from a GIF alone;
+    a montage of time-ordered frame strips can. Samples to <= `max_rows` frames,
+    always keeping the first and last (the loop seam matters most), and — unless
+    `seam` is off — appends the wrap pair [last, first] adjacently under a colored
+    band so the loop join can be read directly. Returns
+    {total, shown: [indices], seam: bool} so the caller can log what was sampled
+    (no silent drop). Each strip is W*scale wide, H*scale tall.
+    """
+    from PIL import Image
+
+    if not frames:
+        raise SystemExit("cb_led: no frames to montage")
+    bad = next((i for i, f in enumerate(frames) if len(f) != PIXELS), None)
+    if bad is not None:
+        raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
+
+    n = len(frames)
+    max_rows = max(2, max_rows)
+    shown = (list(range(n)) if n <= max_rows
+             else sorted({round(i * (n - 1) / (max_rows - 1)) for i in range(max_rows)}))
+
+    sw, sh, sep = W * scale, H * scale, 2
+    white, band = (255, 255, 255), (255, 120, 0)  # band marks the wrap-seam section
+
+    def strip(idx: int) -> Image.Image:
+        img = Image.new("RGB", (W, H))
+        img.putdata([_hex_px(s) for s in frames[idx]])
+        return img.resize((sw, sh), Image.Resampling.NEAREST)
+
+    parts: list[tuple[str, object, int]] = []  # (kind, strip-index | fill-color, height)
+    for idx in shown:
+        parts += [("strip", idx, sh), ("gap", white, sep)]
+    parts.pop()  # no trailing gap
+    show_seam = seam and n > 1
+    if show_seam:
+        parts += [("gap", white, sep), ("gap", band, sep * 4),
+                  ("strip", n - 1, sh), ("gap", white, sep), ("strip", 0, sh)]
+
+    canvas = Image.new("RGB", (sw, sum(h for _, _, h in parts)), white)
+    y = 0
+    for kind, val, h in parts:
+        if kind == "strip":
+            canvas.paste(strip(val), (0, y))  # type: ignore[arg-type]
+        elif val != white:
+            canvas.paste(Image.new("RGB", (sw, h), val), (0, y))  # type: ignore[arg-type]
+        y += h
+    canvas.save(output)
+    return {"total": n, "shown": shown, "seam": show_seam}
+
+
 # --- GIF -> IR -------------------------------------------------------------------
 
 def _gif_frames(path: Path, resample: str) -> tuple[list[list[str]], int | None]:

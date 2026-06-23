@@ -7,10 +7,18 @@
 # プレビュー GIF(base 不要・高速イテレーション用)
 uv run --extra led cyberboard anim preview -r examples/led/text-scroll.json -o /tmp/preview.gif
 
+# モンタージュ PNG(縦に時間が進む静止画 → GIF を1枚目しか出さないビューアでも動き/ループを確認)
+uv run --extra led cyberboard anim montage -r examples/led/sprite-scroll.json -o /tmp/sheet.png
+
 # 完全な base IR の slot へ焼き込み(per-key keyframes は base 由来で維持)+ プレビュー同時出力
 uv run --extra led cyberboard anim render -r examples/led/sequence.json -b <base.json> -o config.json --gif /tmp/preview.gif
 # config.json を実機へ: uv run cyberboard write config.json --execute
 ```
+
+`montage` は各フレームを上から下へ並べた縦長 PNG を出す。GIF は多くのビューア(Read ツール
+含む)で**先頭フレームしか表示されない**ため、動き・ループ・継ぎ目の判断には montage を使う。
+フレームが多い時は最大 `--max`(既定 24)枚へ等間隔サンプリング(先頭・末尾は必ず含む)し、
+末尾にオレンジ帯 + 巻き戻りペア `[末尾, 先頭]` を並べてループの繋ぎ目を直接見られる(`--no-seam` で省略)。
 
 > LED 系(`anim` / `led`)は Pillow が要るので `--extra led`。デバイス I/O(`write` /
 > `read` / `devices`)は pyserial が core 依存なので追加 extra 不要。インストール後は

@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-06-23 (続26) — #6 後半①: `anim montage`(動きを「見る」プリミティブ)を先行小 PR で
+
+issue #6 後半(LED デザイン vision ループ agent)の作戦会議 → ユーザー決定 **① sprite ソース =
+「画像入力ベース + 任意で AI 生成」**。残り(②〜⑥)は推奨で固めて進行。advisor 助言で **agent 本体の
+前に「動きを見る土台」= montage プリミティブを独立小 PR** で出すことに(⑥ の最初の一歩)。
+
+### なぜ montage が要るか(advisor + 続25 で実証済みの前提)
+
++ **GIF は Read ツール等で先頭フレームしか出ない**(続25 の chevron 1 枚目)→ GIF 単体では動き・ループ・
+  継ぎ目を vision 判断できない。続25 の `sprite_verify.py` montage で direction/1px ステップ/wrap を
+  正しく目視できたのが裏付け → **その実証済みレイアウト(縦積み・時間=下・白セパレータ)をそのまま昇格**。
+
+### 実装(`cb_led.frames_to_montage` + `cb_anim montage`)
+
++ **置き場所 = cb_led**(コーデックの家、`frames_to_gif`/`frames_to_page` の隣・テスト可)。`anim montage`
+  は `anim preview → cb_led.frames_to_gif` と同型(`_render_recipe` → `frames_to_montage`)。`led montage`
+  は投機実装しない(agent が要るまで)。
++ **サンプリング**(advisor): ≤`--max`(既定 24)は全フレーム、超過は**等間隔 + 先頭・末尾を必ず含む**
+  (繋ぎ目判定に末尾が要る)。**何枚中何枚出したか stdout に出す**(no silent drop の原則)。
++ **seam ペア**(advisor の refinement): 末尾にオレンジ帯 + 巻き戻りペア `[末尾, 先頭]` を隣接表示 →
+  ループの繋ぎ目を縦に目を飛ばさず直接確認。`--no-seam` で省略、単一フレーム時は自動 off。
++ docstring/help/README(examples + main)/`40` 反映。`anim montage` を `cyberboard` エントリにも配線(help 更新)。
+
+### 検証 🟢(目視 + 機械)
+
++ **sprite-scroll(56f)montage を Read**: 時間=下方向に chevron が窓を上昇、`gap:8` の空白が黒帯として
+  流れ、末尾オレンジ帯 + `[55,0]` ペアが 1px ステップで連続(seamless)を目視。**24 of 56 等間隔**の stdout 一致。
++ **text_scroll(`gap:0`, 25f)montage を Read**: "AM R4" が左へ 1px/frame、対角タイリングで継ぎ目なし、
+  glyph も legible。seam ペアも対角を連続。
++ **エッジ/回帰**: 単一 solid フレーム=「all 1」seam 自動 off / `anim preview` 回帰 OK / `cyberboard anim
+  montage`(エントリ経由)で sequence 136f→24 サンプリング OK / find-debug は既存 `play` の KeyboardInterrupt
+  warning のみ(本変更外)。
+
+### 次(#6 後半②・別 PR)
+
++ **LED デザイン agent 本体**: 画像入力(主)→ sprite レシピ組立 → `anim montage` で vision 目視 → param
+  改訂(2-3 ラウンド自走)→ ユーザー承認 → 焼込/書込。⚠ **advisor フラグ厳守**: 「任意で AI 生成」は
+  **額面どおり生成モデル**と解釈し、40px 縮小で粗くなる懸念は**agent 内でユーザーに明示選択**させる
+  (procedural を勝手に既定にしない)。判定の並列化(N クロップ/パラメータ変種を montage→vision で選抜=
+  judge-panel/tournament)は ultracode 並列が効く所(advisor seed)。plugin skill `cyberboard-led` の効果
+  カタログへ sprite + 「AI に任せて作る」ブランチ追加もこの PR で。
+
+---
+
 ## 2026-06-23 (続25) — #6 前半: キャラ縦スクロール(sprite)エフェクトを cb_anim に追加
 
 issue #6 の 3 原型最後(スプライト系)の**手続き部分のみ**先行実装(agent の vision ループは別 PR)。

@@ -7,6 +7,7 @@
 
     cb_anim.py render  -r recipe.json -b base.json -o config.json [--gif art.gif]
     cb_anim.py preview -r recipe.json -o art.gif [--scale 16]
+    cb_anim.py montage -r recipe.json -o sheet.png [--max 24 | --no-seam]
 
 A *recipe* is a small declarative JSON document. A deterministic renderer expands
 it to 40x5xN frames — the AI/author only picks knobs, no raw code runs (whitelisted
@@ -416,6 +417,22 @@ def preview(args: argparse.Namespace) -> int:
     return 0
 
 
+def montage(args: argparse.Namespace) -> int:
+    """recipe -> a tall still PNG (time goes down) so motion/loop/seam can be judged
+    in a viewer that only shows a GIF's first frame (e.g. the Read tool)."""
+    recipe = json.loads(Path(args.recipe).read_text())
+    _slot, _speed, frames = _render_recipe(recipe)
+    info = cb_led.frames_to_montage(frames, args.output, args.scale,
+                                    args.max, not args.no_seam)
+    shown, total = info["shown"], info["total"]
+    note = (f"all {total}" if len(shown) == total
+            else f"{len(shown)} of {total} (even-sampled, incl. first+last)")
+    seam = " + wrap-seam pair [last,first]" if info["seam"] else ""
+    print(f"cb_anim: montage {note} frames{seam} @ "
+          f"{W * args.scale}x{H * args.scale}/frame -> {args.output}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Recipe -> IR display-layer (40x5) renderer")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -434,6 +451,17 @@ def main() -> int:
     p.add_argument("-o", "--output", required=True, help="output animated GIF")
     p.add_argument("--scale", type=int, default=16, help="pixel scale-up (default 16)")
     p.set_defaults(func=preview)
+
+    m = sub.add_parser("montage",
+                       help="recipe -> tall PNG (time down) to inspect motion/loop in a still viewer")
+    m.add_argument("-r", "--recipe", required=True, help="recipe JSON")
+    m.add_argument("-o", "--output", required=True, help="output PNG (frame montage)")
+    m.add_argument("--scale", type=int, default=8, help="pixel scale-up per frame (default 8)")
+    m.add_argument("--max", type=int, default=24,
+                   help="max frame rows; more frames are even-sampled (default 24)")
+    m.add_argument("--no-seam", action="store_true",
+                   help="omit the wrap-seam [last,first] pair at the bottom")
+    m.set_defaults(func=montage)
 
     args = ap.parse_args()
     return args.func(args)

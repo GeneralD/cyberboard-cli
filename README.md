@@ -63,7 +63,7 @@ uv run --extra led cyberboard --help     # LED commands need --extra led; device
 | `build` | `keymap.toml` → IR config (`--dump` for the reverse) |
 | `verify` | Validate an IR config against the schema |
 | `led` | GIF ⇄ IR display codec + terminal player (`gif2ir` / `ir2gif` / `play` / `recipe`) |
-| `anim` | Render declarative LED animations (`render` / `preview`) |
+| `anim` | Render declarative LED animations (`render` / `preview` / `montage`) |
 | `read` | Read config back from the device (`keymap`) |
 | `write` | Write an IR config to the device |
 | `set-time` | Set the device RTC clock |
@@ -178,7 +178,8 @@ Done:
   LED has no read-back path, so it's authored from source.
 - **M3 — Keymap build** ✅ `keymap.toml` → IR with lossless round-trip.
 - **M5 — LED display authoring** ✅ GIF ⇄ IR codec + declarative animation recipes
-  - an in-terminal player (`led play`, half-block truecolor).
+  - an in-terminal player (`led play`, half-block truecolor) and a frame
+    montage (`anim montage`) for judging motion/loop in a still viewer.
 
 Productization (in progress): a unified `cyberboard` CLI core (done), standalone
 packaging (this), then an MCP server and a Claude plugin that all call the same
