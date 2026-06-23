@@ -1,0 +1,18 @@
+{
+  "slot": 1,
+  "speed_ms": 80,
+  "layers": [
+    {
+      "effect": "hue_cycle",
+      "cycle_frames": 18,
+      "spread": 360
+    },
+    {
+      "effect": "text_scroll",
+      "text": "NEON",
+      "fg": "#ffffff",
+      "bg": "transparent",
+      "gap": 0
+    }
+  ]
+}

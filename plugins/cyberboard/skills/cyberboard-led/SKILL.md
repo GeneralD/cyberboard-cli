@@ -106,6 +106,7 @@ Ask, in Japanese:
   - **模様マーキー** — 虹サイクル / ストライプ / グラデ流し(`hue_cycle` / `stripes` / `gradient_scroll`)
   - **キャラ / 絵を縦に流す** — スプライト画像を 40px 幅で縦スクロール(`sprite`)
   - **GIF を取り込む** — 手持ちの GIF を 40×5 に取り込む(`led gif2ir`)
+  - **レイヤ合成(背景+文字)** — 模様や色の上に文字を重ねる(`layers` compositor)
 
   **どのスロット(1/2/3)に書き込むかは後で聞きます(手順 4a)。** アニメーションの設計は
   スロット非依存なので、まず「何を作るか」を決めましょう。
@@ -180,6 +181,16 @@ showing the user. (A GIF reads as one still frame — judge with `montage`, abov
    - **`sprite`:** is the subject still recognizable after the 40-px width-fit
      (not mush)? Is the loop blank→blank (`gap >= 5`), not edge→edge? Did 256-frame
      truncation cut the art's bottom (if so, raise `step`)?
+   - **`layers` (compositor):** (a) Is the **text readable** on top of the background —
+     does `fg` contrast against every background colour the hue/pattern cycles through?
+     A bright white `#ffffff` on a full-spectrum `hue_cycle` passes; a colour close to
+     the cycling background (e.g. green `#00ff00` fg on a rainbow that passes through
+     green) vanishes for part of the loop — fail. (b) Is the **loop phase-coherent**?
+     The LCM policy makes the combined animation start in phase, but if the CLI warned
+     about falling back to `max` (LCM > 256), the layers will drift at the seam —
+     adjust `cycle_frames` or `step` so `lcm(text_length, cycle_frames) ≤ 256`.
+     (c) No stray black pixels where transparency should punch through? The bottom of
+     the montage (seam pair `[last, first]`) should look continuous with the top.
 4. Converge in **2–3 rounds**. Then **`SendUserFile` the GIF + the montage** and
    ask 「これで書き込みますか?」 → on a clear yes, continue to **step 4 (Choose the
    slot + prepare a complete base IR)** onward.
@@ -336,6 +347,38 @@ image** (animated GIF → first frame). See **2b** for how to get the art.
 > `step` easily passes 256 frames → the CLI warns and truncates (the art's bottom
 > never shows); raise `step` to fit.
 
+### `layers` — composite a stack of effects (bottom-to-top alpha punch-through)
+
+Place a background effect in the bottom layer and a text or pattern on top with
+`"bg": "transparent"` so the text pixels overlay the background without obscuring it.
+
+Top-level structure — a segment with a **`"layers"` key** instead of `"effect"`:
+
+```json
+{
+  "layers": [
+    { "effect": "hue_cycle",  "cycle_frames": 18, "spread": 360 },
+    { "effect": "text_scroll", "text": "NEON", "fg": "#ffffff", "bg": "transparent", "gap": 0 }
+  ]
+}
+```
+
+**Frame-count policy:** the compositor tries `lcm` of all layer lengths — the
+natural seamless period. If `lcm > 256`, it falls back to `max` (the CLI warns;
+the layers drift at the loop seam). **Tip:** pick `cycle_frames` such that
+`lcm(text_strip_width, cycle_frames) ≤ 256`. For example, if the text strip is
+24 px, `cycle_frames=18` gives `lcm(24, 18) = 72`.
+
+- `"layers"` **must not** contain `"sequence"` or nested `"layers"` (one level only).
+- The effect inside a layer can have `"bg": "transparent"` / `"none"` / omitted
+  — those pixels are punch-through.
+- Remaining transparent pixels at the very bottom layer default to `#000000`.
+- Can be used as a top-level recipe **or** as a segment inside a `"sequence"`.
+
+| key | meaning |
+|---|---|
+| `layers` | (required) ordered list of effect segments, bottom first |
+
 ## Recipe examples (small, inline)
 
 > **`"slot"` is optional in recipes** — it defaults to 1 and is overridden by `--slot N` at
@@ -380,6 +423,19 @@ A character scrolling up (slot 1) — needs an image; clean loop via `gap`:
 
 ```json
 { "slot": 1, "speed_ms": 70, "effect": "sprite", "sprite": "char.png", "gap": 6, "direction": "up" }
+```
+
+Rainbow background with white text overlaid (`layers`; `lcm(24, 18) = 72 ≤ 256`):
+
+```json
+{
+  "slot": 1,
+  "speed_ms": 80,
+  "layers": [
+    { "effect": "hue_cycle",   "cycle_frames": 18, "spread": 360 },
+    { "effect": "text_scroll", "text": "NEON", "fg": "#ffffff", "bg": "transparent", "gap": 0 }
+  ]
+}
 ```
 
 ## Notes

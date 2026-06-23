@@ -48,6 +48,11 @@ import cb_led  # shared: frames_to_page, frames_to_gif, W, H, PIXELS, MAX_FRAMES
 W, H, PIXELS, MAX_FRAMES = cb_led.W, cb_led.H, cb_led.PIXELS, cb_led.MAX_FRAMES
 FONT_PATH = cb_font.FONT_PATH  # re-exported for backward compatibility
 
+# Sentinel for a transparent pixel inside the compositor.  Any frame that still
+# contains this value when it reaches frames_to_page is a bug — the codec guard
+# will catch it with a clean error.
+TRANSPARENT = "none"
+
 
 def _warn(msg: str) -> None:
     print(f"cb_anim: {msg}", file=sys.stderr)
@@ -59,6 +64,26 @@ def _color(s: str) -> str:
     if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
         raise SystemExit(f"cb_anim: bad color {s!r} (want #RRGGBB)")
     return "#" + h.lower()
+
+
+def _bg_color(seg: dict, default: str = "#000000") -> str:
+    """Return the background colour for a segment.
+
+    - If ``"bg"`` is absent: returns ``default`` (opaque black by default).
+    - If ``"bg"`` is explicitly ``"transparent"`` / ``"none"`` / ``"null"``
+      (case-insensitive): returns the ``TRANSPARENT`` sentinel so a ``layers``
+      compositor can punch through.
+    - Otherwise: validates and normalises as ``#RRGGBB``.
+
+    Use this instead of ``_color`` for the ``bg`` key so that a ``layers``
+    compositor can overlay text onto a background without obscuring it.
+    """
+    raw = seg.get("bg")
+    if raw is None:
+        return default
+    if str(raw).lower() in ("transparent", "none", "null"):
+        return TRANSPARENT
+    return _color(raw)
 
 
 def _colors(seg: dict, key: str = "colors", minimum: int = 1) -> list[str]:
@@ -96,7 +121,7 @@ def _effect_text_scroll(seg: dict) -> list[list[str]]:
     if not text:
         raise SystemExit("cb_anim: text_scroll needs a non-empty 'text'")
     fg = _color(seg.get("fg", "#00ff88"))
-    bg = _color(seg.get("bg", "#000000"))
+    bg = _bg_color(seg)
     spacing = int(seg.get("spacing", 1))
     step = max(1, int(seg.get("step", 1)))
     gap = max(0, int(seg.get("gap", 0)))
@@ -304,7 +329,81 @@ EFFECTS = {
 }
 
 
+# --- layer compositor ------------------------------------------------------------
+
+def _composite(layer_segs: list[dict]) -> list[list[str]]:
+    """Composite a stack of effect layers bottom-to-top, alpha (transparent) punching
+    through to the layer below.
+
+    Frame-count policy:
+    - Try ``math.lcm`` of all layer lengths — the natural seamless period.
+    - If the LCM > MAX_FRAMES, fall back to ``max`` of all lengths and warn that
+      the layers will drift at the loop seam (they won't repeat in phase).
+    """
+    if not layer_segs:
+        raise SystemExit("cb_anim: 'layers' must be a non-empty list")
+    layer_frames: list[list[list[str]]] = []
+    for i, seg in enumerate(layer_segs):
+        if "layers" in seg or "sequence" in seg:
+            raise SystemExit(f"cb_anim: layers[{i}] must not contain 'layers' or 'sequence' "
+                             f"(nesting is not supported)")
+        layer_frames.append(_render_segment(seg))
+
+    lens = [len(lf) for lf in layer_frames]
+    natural = math.lcm(*lens)
+    if natural <= MAX_FRAMES:
+        n = natural
+    else:
+        n = max(lens)
+        _warn(f"layers: lcm of layer lengths {lens} = {natural} > {MAX_FRAMES}; "
+              f"using max({n}) — the layers will drift at the loop seam")
+
+    composited: list[list[str]] = []
+    for i in range(n):
+        flat = [TRANSPARENT] * PIXELS
+        for lf in layer_frames:
+            src = lf[i % len(lf)]
+            flat = [
+                (src[j] if src[j] != TRANSPARENT else flat[j])
+                for j in range(PIXELS)
+            ]
+        # bottom layer may still carry TRANSPARENT if it also used transparent bg —
+        # resolve remaining sentinels to black so the codec boundary is always opaque
+        composited.append([px if px != TRANSPARENT else "#000000" for px in flat])
+    return composited
+
+
+def _render_segment(seg: dict) -> list[list[str]]:
+    """Dispatch a single segment: either a ``layers`` compositor or a named effect."""
+    if "layers" in seg:
+        return _composite(seg["layers"])
+    eff = seg.get("effect")
+    fn = EFFECTS.get(eff)
+    if fn is None:
+        raise SystemExit(f"cb_anim: unknown effect {eff!r} "
+                         f"(have: {', '.join(sorted(EFFECTS))}; "
+                         f"for compositing use 'layers': [...])")
+    return fn(seg)
+
+
 # --- recipe -> frames ------------------------------------------------------------
+
+def _assert_opaque(frames: list[list[str]]) -> None:
+    """Fail cleanly if any TRANSPARENT sentinel survives to the codec boundary.
+
+    A bare ``bg: "transparent"`` used outside a ``layers`` compositor has nothing
+    beneath it to punch through to, so the sentinel ("none") would otherwise reach
+    a codec and crash ungracefully — ``frames_to_gif`` (preview/montage) chokes on
+    it, and ``frames_to_page`` (write) has its own backstop guard. Catching it here
+    makes *every* output path fail with the same actionable message.
+    """
+    leak = next((i for i, f in enumerate(frames) if TRANSPARENT in f), None)
+    if leak is not None:
+        raise SystemExit(
+            f"cb_anim: transparent bg at frame {leak} has nothing beneath it — "
+            f"bg='transparent' is only valid inside a 'layers' composite "
+            f"(wrap the effect: 'layers': [<background>, <this effect>])")
+
 
 def _render_recipe(recipe: dict) -> tuple[int, int, list[list[str]]]:
     """Expand a recipe to (slot, speed_ms, frames). Caps at MAX_FRAMES with a
@@ -313,13 +412,9 @@ def _render_recipe(recipe: dict) -> tuple[int, int, list[list[str]]]:
     speed = int(recipe.get("speed_ms", 100))
     segments = recipe.get("sequence") or [recipe]  # single-effect convenience
     frames: list[list[str]] = []
-    for k, seg in enumerate(segments):
-        eff = seg.get("effect")
-        fn = EFFECTS.get(eff)
-        if fn is None:
-            raise SystemExit(f"cb_anim: segment {k} has unknown effect {eff!r} "
-                             f"(have: {', '.join(sorted(EFFECTS))})")
-        frames.extend(fn(seg))
+    for seg in segments:
+        frames.extend(_render_segment(seg))
+    _assert_opaque(frames)
     if len(frames) > MAX_FRAMES:
         _warn(f"recipe expands to {len(frames)} frames > {MAX_FRAMES}/slot "
               f"— truncating to {MAX_FRAMES} (firmware playback cap, 90 续5)")
