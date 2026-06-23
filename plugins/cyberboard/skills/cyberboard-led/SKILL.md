@@ -178,7 +178,8 @@ showing the user. (A GIF Reads as one still frame — judge with `montage`, abov
      (not mush)? Is the loop blank→blank (`gap >= 5`), not edge→edge? Did 256-frame
      truncation cut the art's bottom (if so, raise `step`)?
 4. Converge in **2–3 rounds**. Then **`SendUserFile` the GIF + the montage** and
-   ask 「これで書き込みますか?」 → on a clear yes, continue to step 4 (base) on.
+   ask 「これで書き込みますか?」 → on a clear yes, continue to **step 4 (Prepare a
+   complete base IR)** onward.
 
 > If every round self-rates "OK", the criteria aren't doing their job. They are
 > meant to *fail* — that's how the loop improves instead of rubber-stamping.
