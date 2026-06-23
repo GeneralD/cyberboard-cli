@@ -42,10 +42,11 @@ import math
 import sys
 from pathlib import Path
 
+import cb_font  # BDF parser, glyph overrides, text_strip
 import cb_led  # shared: frames_to_page, frames_to_gif, W, H, PIXELS, MAX_FRAMES
 
 W, H, PIXELS, MAX_FRAMES = cb_led.W, cb_led.H, cb_led.PIXELS, cb_led.MAX_FRAMES
-FONT_PATH = Path(__file__).resolve().parent / "fonts" / "tom-thumb.bdf"
+FONT_PATH = cb_font.FONT_PATH  # re-exported for backward compatibility
 
 
 def _warn(msg: str) -> None:
@@ -87,67 +88,6 @@ def _lerp_hex(c0: str, c1: str, t: float) -> str:
     return "#%02x%02x%02x" % tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 
-# --- BDF font (tom-thumb) --------------------------------------------------------
-
-_FONT: tuple[dict, int] | None = None
-
-
-def _font() -> tuple[dict, int]:
-    """Parse the bundled BDF once -> ({codepoint: glyph}, font_ascent)."""
-    global _FONT
-    if _FONT is not None:
-        return _FONT
-    if not FONT_PATH.exists():
-        raise SystemExit(f"cb_anim: font not found: {FONT_PATH}")
-    glyphs: dict[int, dict] = {}
-    ascent = 5
-    cur: dict | None = None
-    lines = iter(FONT_PATH.read_text().splitlines())
-    for ln in lines:
-        if ln.startswith("FONT_ASCENT"):
-            ascent = int(ln.split()[1])
-        elif ln.startswith("STARTCHAR"):
-            cur = {"enc": -1, "dwidth": 0, "bbx": (0, 0, 0, 0), "rows": []}
-        elif ln.startswith("ENCODING") and cur is not None:
-            cur["enc"] = int(ln.split()[1])
-        elif ln.startswith("DWIDTH") and cur is not None:
-            cur["dwidth"] = int(ln.split()[1])
-        elif ln.startswith("BBX") and cur is not None:
-            cur["bbx"] = tuple(int(v) for v in ln.split()[1:5])
-        elif ln.startswith("BITMAP") and cur is not None:
-            cur["rows"] = [int(next(lines).strip(), 16) for _ in range(cur["bbx"][1])]
-        elif ln.startswith("ENDCHAR") and cur is not None:
-            glyphs[cur["enc"]] = cur
-            cur = None
-    _FONT = (glyphs, ascent)
-    return _FONT
-
-
-def _text_strip(text: str, spacing: int) -> tuple[list[list[bool]], int]:
-    """Render `text` to an H-row ink mask; width includes one trailing `spacing`
-    column run so the strip tiles evenly across a seamless wrap. Returns (mask, w)."""
-    glyphs, ascent = _font()
-    advances = [(glyphs.get(ord(ch)), (glyphs.get(ord(ch)) or {}).get("dwidth", 3))
-                for ch in text]
-    width = sum(dw for _, dw in advances) + spacing * len(advances)
-    width = max(width, 1)
-    mask = [[False] * width for _ in range(H)]
-    x = 0
-    for g, dw in advances:
-        if g and g["rows"]:
-            gw, gh, xo, yo = g["bbx"]
-            top = ascent - (gh + yo)  # rows above baseline; tom-thumb fits 5px
-            for ry in range(gh):
-                bits = g["rows"][ry]
-                for cx in range(gw):
-                    if bits & (1 << (7 - cx)):
-                        yy, xx = top + ry, x + xo + cx
-                        if 0 <= yy < H and 0 <= xx < width:
-                            mask[yy][xx] = True
-        x += dw + spacing
-    return mask, width
-
-
 # --- effects (procedural family) -------------------------------------------------
 
 def _effect_text_scroll(seg: dict) -> list[list[str]]:
@@ -164,7 +104,7 @@ def _effect_text_scroll(seg: dict) -> list[list[str]]:
     if direction not in ("left", "right"):
         raise SystemExit(f"cb_anim: text_scroll direction must be left/right, got {direction!r}")
 
-    mask, ink_w = _text_strip(text, spacing)
+    mask, ink_w = cb_font.text_strip(text, spacing, H)
     strip_w = ink_w + gap  # gap columns (blank) appended for the loop seam
     nframes = math.ceil(strip_w / step)
     if strip_w % step:
