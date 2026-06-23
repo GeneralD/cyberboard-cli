@@ -247,6 +247,11 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
   `tools/cb_protocol.py`)。実機 R4 で動作確認済み(`90` 2026-06-22)。
   `list`/`info --json` を持ち、これをそのまま CLI サブコマンドへ昇格できる。
   プロジェクトローカル skill = [`cyberboard-device`](../skills/cyberboard-device/SKILL.md)。
+- **ユーザー向け対話 LED 作成 skill = プラグイン側 🟢**(`90` 続24, issue #2):
+  `plugins/cyberboard/skills/cyberboard-led/SKILL.md`。`cyberboard anim/led/write` を
+  オーケストレーションし AskUserQuestion で slot/効果を選ばせ preview 反復→明示確認→書込。
+  プラグインは cache コピーされ repo 非参照ゆえ効果カタログ/例を**自己完結 inline**。
+  preview は GIF ベース(`led play` は非 TTY で 1 枚=ユーザー端末向け)。base IR は利用者が export。
 - `write` は段階的に: 接続確立 → (必要なら read で現状退避) → 送信 → **read で検証**。
 - `--dry-run` は実送信せずチャンク列を表示。
 - 堅牢化(`30` §6): 列挙条件の厳密化(usage/経路)+ 明示リトライ + 各段で読み戻し検証。
