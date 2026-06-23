@@ -113,9 +113,10 @@ cyberboard anim preview -r recipe.json -o preview.gif --scale 16
 ```
 
 `SendUserFile preview.gif` と一緒に「OK / 調整しますか?」と聞く。調整なら
-recipe を直して再プレビュー。GIF 取込の場合はこのステップで `led gif2ir`
-の出力 IR を `cyberboard led ir2gif -i config.json --slot N -o preview.gif`
-で GIF 化して見せる。
+recipe を直して再プレビュー。**GIF 取込は base が必須**(`gif2ir` の `-b base.json`)
+なので、この段階ではまず手元の元 GIF をそのまま見せて確認し、40×5 へ変換した
+正確な preview は **手順 4 で base を入手した後**に `led gif2ir` の出力 IR を
+`cyberboard led ir2gif -i config.json --slot N -o preview.gif` で GIF 化して見せる。
 
 ### 4. Prepare a complete base IR (mandatory)
 
@@ -127,12 +128,12 @@ A write needs a **full** config to merge into. The user supplies this:
   keymap *and* their current LED for the other slots.
 - **Why it's required:** `JSON_START` erases everything and the display can't
   be read back — so the base must already hold what should survive the write.
-- **Optional keymap refresh:** if the board is connected, you can pull the
-  *keymap* off the device and reconcile it, but **the LED half cannot be read
-  back** — it only ever comes from the base file:
+- **Optional keymap reconcile:** if the board is connected, diff the base's
+  keymap against what's actually on the device (so a base exported earlier
+  isn't stale). **The LED half cannot be read back** — only the keymap:
 
   ```sh
-  cyberboard read keymap --json          # keymap only; LED is NOT readable
+  cyberboard read keymap --compare base.json   # diff device keymap vs base; LED is NOT readable
   ```
 
 If the user has no base config at all, stop and explain they must export one
