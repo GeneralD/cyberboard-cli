@@ -1,6 +1,12 @@
 """BDF font loader for the 40×5 LED display renderer.
 
 Parses the bundled tom-thumb (Fixed4x6, 5px, MIT) BDF once and caches it.
+Also applies in-memory glyph overrides for M/N/W/V, which are
+indistinguishable on the 40×5 display in the fixed-width BDF — the
+distinctive strokes (M's inward peaks, N's diagonal, W's valley, V's point)
+are lost when all four share the same 4-wide bounding box.  The overrides
+use 5-wide bitmaps so each letter has a unique silhouette, without modifying
+the BDF file.
 
 The glyph dict structure mirrors the BDF parser output exactly:
     {
@@ -20,6 +26,55 @@ from pathlib import Path
 FONT_PATH = Path(__file__).resolve().parent / "fonts" / "tom-thumb.bdf"
 
 # ---------------------------------------------------------------------------
+# In-memory glyph overrides (issue #30)
+#
+# tom-thumb is fixed-width: M, N, W, V all share the same 4×5 cell.
+# Rows 0-2 are identical for M and N; rows 0-2 are identical for W and V.
+# On the 40×5 display they look the same.  These 5-wide bitmaps restore the
+# distinctive strokes of each letter.
+#
+# Pixel maps (5 bits = cols 0-4, '#'=ink, '.'=blank, bits b7..b3):
+#
+#   M  row0: #.#.#  = 0xA8   N  row0: #...#  = 0x88
+#      row1: #####  = 0xF8      row1: ##..#  = 0xC8
+#      row2: #.#.#  = 0xA8      row2: #.#.#  = 0xA8
+#      row3: #...#  = 0x88      row3: #..##  = 0x98
+#      row4: #...#  = 0x88      row4: #...#  = 0x88
+#
+#   W  row0: #...#  = 0x88   V  row0: #...#  = 0x88
+#      row1: #...#  = 0x88      row1: #...#  = 0x88
+#      row2: #.#.#  = 0xA8      row2: #...#  = 0x88
+#      row3: #####  = 0xF8      row3: .#.#.  = 0x50
+#      row4: #.#.#  = 0xA8      row4: ..#..  = 0x20
+# ---------------------------------------------------------------------------
+_GLYPH_OVERRIDES: dict[int, dict] = {
+    ord("M"): {
+        "enc": ord("M"),
+        "dwidth": 6,
+        "bbx": (5, 5, 0, 0),
+        "rows": [0xA8, 0xF8, 0xA8, 0x88, 0x88],
+    },
+    ord("N"): {
+        "enc": ord("N"),
+        "dwidth": 6,
+        "bbx": (5, 5, 0, 0),
+        "rows": [0x88, 0xC8, 0xA8, 0x98, 0x88],
+    },
+    ord("W"): {
+        "enc": ord("W"),
+        "dwidth": 6,
+        "bbx": (5, 5, 0, 0),
+        "rows": [0x88, 0x88, 0xA8, 0xF8, 0xA8],
+    },
+    ord("V"): {
+        "enc": ord("V"),
+        "dwidth": 6,
+        "bbx": (5, 5, 0, 0),
+        "rows": [0x88, 0x88, 0x88, 0x50, 0x20],
+    },
+}
+
+# ---------------------------------------------------------------------------
 # Parser & cache
 # ---------------------------------------------------------------------------
 
@@ -27,7 +82,11 @@ _FONT: tuple[dict, int] | None = None
 
 
 def font() -> tuple[dict, int]:
-    """Return ({codepoint: glyph}, font_ascent), parsed from BDF and cached."""
+    """Return ({codepoint: glyph}, font_ascent), parsed from BDF and cached.
+
+    The glyph overrides for M/N/W/V are applied before caching so every
+    caller transparently gets distinguishable versions of those four glyphs.
+    """
     global _FONT
     if _FONT is not None:
         return _FONT
@@ -53,6 +112,8 @@ def font() -> tuple[dict, int]:
         elif ln.startswith("ENDCHAR") and cur is not None:
             glyphs[cur["enc"]] = cur
             cur = None
+    # Apply variable-width overrides: M/N/W/V are indistinguishable in BDF
+    glyphs.update(_GLYPH_OVERRIDES)
     _FONT = (glyphs, ascent)
     return _FONT
 
