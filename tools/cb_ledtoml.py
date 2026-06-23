@@ -132,6 +132,9 @@ def _compose_slot(slot: dict, base: dict, base_dir: Path) -> tuple[int, dict]:
         raise SystemExit(f"cb_ledtoml: slot {index} resample must be one of {RESAMPLE} "
                          f"(got {resample!r})")
     sources = slot.get("sources") or []
+    if not isinstance(sources, list) or not all(isinstance(s, dict) for s in sources):
+        raise SystemExit(f"cb_ledtoml: slot {index} sources must be a list of tables "
+                         f'(e.g. sources = [ {{ recipe = "scroll.json" }} ])')
     if not sources:
         raise SystemExit(f"cb_ledtoml: slot {index} has no sources "
                          f"(omit the [[slot]] entirely to keep the base unchanged)")
@@ -180,9 +183,17 @@ def compose(args: argparse.Namespace) -> int:
                          "or pass -b (LED has no read-back, so a complete base is required)")
     base = json.loads(_resolve(base_path, base_dir).read_text())
 
-    slots = manifest.get("slot") or []
+    slots = manifest.get("slot")
     if not slots:
         raise SystemExit("cb_ledtoml: manifest has no [[slot]] entries")
+    if not isinstance(slots, list) or not all(isinstance(s, dict) for s in slots):
+        raise SystemExit("cb_ledtoml: [[slot]] must be an array of tables — "
+                         "write [[slot]] once per slot, not a single [slot]")
+    raw_indices = [s.get("index") for s in slots]
+    dups = sorted({i for i in raw_indices if i in (1, 2, 3) and raw_indices.count(i) > 1})
+    if dups:
+        raise SystemExit(f"cb_ledtoml: duplicate [[slot]] index {dups} — "
+                         f"each slot (1/2/3) may appear at most once")
 
     composed = [_compose_slot(slot, base, base_dir) for slot in slots]
     Path(args.output).write_text(json.dumps(base, ensure_ascii=False, indent=2))
