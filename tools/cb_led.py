@@ -81,7 +81,7 @@ def frames_to_page(base: dict, slot: int, frames: list[list[str]],
         raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
     if len(frames) > MAX_FRAMES:
         _warn(f"{len(frames)} frames; firmware plays only {MAX_FRAMES}/slot "
-              f"— dropping {len(frames) - MAX_FRAMES} (90 续5)")
+              f"— dropping {len(frames) - MAX_FRAMES}")
         frames = frames[:MAX_FRAMES]
     page["frames"] = {
         "valid": 1,
@@ -177,7 +177,7 @@ def ir2gif(args: argparse.Namespace) -> int:
     colors = {px for f in frames for px in f}
     if len(colors) > 256:
         _warn(f"{len(colors)} distinct colors across frames > 256 — GIF's single global "
-              f"palette will approximate color (IR JSON is the lossless form, 90 续17)")
+              f"palette will approximate color (the IR JSON is the lossless form)")
     dups = sum(1 for i in range(1, len(frames)) if frames[i] == frames[i - 1])
     if dups:
         _warn(f"{dups} identical consecutive frame(s) will be coalesced by the GIF writer "
@@ -272,6 +272,8 @@ def play(args: argparse.Namespace) -> int:
         raise SystemExit("cb_led: --scale must be >= 1")
     if args.fps is not None and args.fps <= 0:
         raise SystemExit("cb_led: --fps must be > 0")
+    if args.loop is not None and args.loop < 1:
+        raise SystemExit("cb_led: --loop must be >= 1 (omit it to loop forever)")
 
     if args.slot is not None:
         config = json.loads(Path(args.input).read_text())
@@ -288,12 +290,14 @@ def play(args: argparse.Namespace) -> int:
         default_ms = gif_ms or 100
         src = Path(args.input).name
 
+    if not frames:
+        raise SystemExit(f"cb_led: no frames to play in {Path(args.input).name}")
     bad = next((i for i, f in enumerate(frames) if len(f) != PIXELS), None)
     if bad is not None:
         raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
     if len(frames) > MAX_FRAMES:
         _warn(f"{len(frames)} frames; firmware plays only {MAX_FRAMES}/slot "
-              f"— showing the first {MAX_FRAMES} (90 续5)")
+              f"— showing the first {MAX_FRAMES}")
         frames = frames[:MAX_FRAMES]
 
     ms = (1000.0 / args.fps) if args.fps else (
