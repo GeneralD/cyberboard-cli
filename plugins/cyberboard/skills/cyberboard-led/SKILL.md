@@ -160,7 +160,7 @@ recipe を直して再プレビュー。**GIF 取込は base が必須**(`gif2ir
 
 When the user delegates the look ("いい感じに" / a vibe rather than exact knobs),
 **you iterate by looking at a montage and self-critiquing, 2–3 rounds**, before
-showing the user. (A GIF Reads as one still frame — judge with `montage`, above.)
+showing the user. (A GIF reads as one still frame — judge with `montage`, above.)
 
 1. Build a recipe from the intent (the effect family is fixed in step 1).
 2. `cyberboard anim montage -r recipe.json -o sheet.png` → **Read `sheet.png`.**
