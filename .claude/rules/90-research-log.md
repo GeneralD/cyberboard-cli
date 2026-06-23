@@ -4,6 +4,56 @@
 
 ---
 
+## 2026-06-23 (続27) — #6 後半②: LED デザイン vision ループを `cyberboard-led` スキルに内蔵(全効果デザイナー)
+
+issue #6 後半の本体。montage プリミティブ(続26)の上に、**おまかせデザイン = エージェントが montage を
+見て自己批評しながら 2〜3 周回してパラメータを詰める** vision ループを `plugins/cyberboard/skills/
+cyberboard-led/SKILL.md` に追加(367 行、400 制限内)。ユーザー決定 **⑤ 全効果デザイナー**(sprite +
+text_scroll + 模様 marquee 全部)/ **AI 生成は毎回ユーザーに選ばせる**。新規 CLI コードなし(既存の
+`anim montage`/`anim render`/`led` をオーケストレーションするだけ=対話=skill / 非対話=CLI の分離方針通り)。
+
+### advisor の効いた指摘(設計の芯)
+
++ **ループの価値は「落ちうる(falsifiable)批評基準」にある**。実証済みは *知覚*(続25-26 で montage を
+  Read して空間判断できた)だが *改訂* は未実証 — 自己批評ループは放っておくと「良さそう」で全部
+  rubber-stamp する。周回数を増やすのでなく**ファミリー別の具体基準**を入れろ → skill に明記。
++ **書く前に手で 1 周回せ**(dogfood)。ループが収束するか rubber-stamp するかの実証 + 効いた基準が
+  そのまま skill 本文になる + この PR の検証アーティファクト。
++ **400 行超過 = 抽出のシグナル**(compress でなく forked subagent へ)。今回は 367 行に収まり inline 採用。
+  judge-panel 並列(v2)で subagent 化する時の置き場は `plugins/cyberboard/agents/`。
++ **AI 生成のポータビリティ**: Codex は環境依存(ChatGPT ログイン)→ **手持ち画像 + PIL が可搬な背骨**。
+  Codex 分岐は可用性でゲートし、メニューに**実在する選択肢だけ**出す(死んだ選択肢を出さない)。
++ **ルーティング**: 効果ファミリーを**意図から先に**決め、画像 / AI 生成の確認は **sprite 分岐だけ**。
+
+### dogfood 実証 🟢(収束する=rubber-stamp しない)
+
++ 目標「紫の "NEON" を綺麗にループ」。1 周目 `fg:#330033`(暗紫)を montage Read →
+  **「40px で黒背景と判別できない=読めない」で legibility 基準が落ちた**(ループ基準は PASS)。
++ 2 周目 `fg:#cc44ff`(明るいネオン紫)→ montage Read → **明瞭に読める=基準通過**。
++ = 批評基準が実際に**差別化して落ち→直し→通る**。ループが収束し rubber-stamp しないことを montage で
+  確定。この discriminating 基準(40px コントラスト)を skill 本文へそのまま採用。
+
+### skill 拡張の中身
+
++ **3b おまかせデザイン(vision ループ)**: build→`anim montage`→Read→**falsifiable 基準で自己批評**
+  (全: 巻き戻りペアが 1px か段差か / text: 40px で読めるか・グリフ 5px 内か / 模様: wrap が frame0 と
+  一致か・バンディング / sprite: 縮小で被写体判別可か・`gap>=5` か・256 切れで下端欠けか)→改訂 2〜3 周→
+  `SendUserFile` で GIF + montage 提示→明示確認→書込。「毎回 OK なら基準が機能していない兆候」と明記。
++ **montage を自己批評の目に**: GIF は Read で先頭 1 枚しか出ない → 動き/ループ/継ぎ目は montage で判断、
+  GIF はユーザーに見せる用、と役割分離を skill に明記。
++ **sprite を効果カタログ + 「何を作る?」に追加**(画像入力ベース)。**2b スプライトの絵の用意**=
+  手持ち画像 / AI 生成(Codex 可用時のみ・40px 粗化を明示) / PIL 手続き描画 を**毎回選ばせる**。
++ 例 sprite レシピ追加。効果ファミリー先決め + sprite だけ画像確認、のルーティングを明記。
+
+### 次
+
++ **per-key(keyframes)GIF**: web-index ↔ keyframes-90 の相関(続15-16 の open item)。
++ **judge-panel 並列化(v2)**: N パラメータ変種を montage→vision で選抜 → ultracode 並列が効く。
+  その時にループを `plugins/cyberboard/agents/` の forked subagent へ抽出。
++ `led.toml` 複数ソース合成 / 実機 end-to-end 仕上げ / TUI エディタ。
+
+---
+
 ## 2026-06-23 (続26) — #6 後半①: `anim montage`(動きを「見る」プリミティブ)を先行小 PR で
 
 issue #6 後半(LED デザイン vision ループ agent)の作戦会議 → ユーザー決定 **① sprite ソース =
