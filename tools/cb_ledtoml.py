@@ -83,6 +83,8 @@ def _source_frames(src: dict, outer_slot: int, resample: str,
                          f"(got {kinds or 'none'})")
     kind = kinds[0]
     path = _resolve(src[kind], base_dir)
+    if not path.exists():
+        raise SystemExit(f"cb_ledtoml: {kind} source not found: {path}")
     if kind == "gif":
         frames, gif_ms = cb_led._gif_frames(path, resample)
         return f"gif:{path.name}", frames, gif_ms
@@ -137,7 +139,7 @@ def _compose_slot(slot: dict, base: dict, base_dir: Path) -> tuple[int, dict]:
     extracted = [_source_frames(s, index, resample, base_dir) for s in sources]
     counts = [len(frs) for _, frs, _ in extracted]
     kept, dropped = _cap_plan(counts)
-    frames = [fr for (_, frs, _), k in zip(extracted, kept) for fr in frs[:k]]
+    frames = [fr for (_, frs, _), k in zip(extracted, kept, strict=True) for fr in frs[:k]]
 
     speed = slot.get("speed_ms")
     if speed is None:  # fall back to the first GIF's duration, else base keeps its own
@@ -155,7 +157,7 @@ def _report_slot(index: int, page: dict, extracted, kept: list[int],
     print(f"cb_ledtoml: slot {index} (page {page['page_index']}) <- "
           f"{page['frames']['frame_num']} frames from {len(extracted)} source(s)"
           f"{note}; keyframes kept from base")
-    for (label, frs, _), k in zip(extracted, kept):
+    for (label, frs, _), k in zip(extracted, kept, strict=True):
         if k == len(frs):
             print(f"    {label}: {len(frs)}")
         elif k == 0:
