@@ -4,6 +4,44 @@
 
 ---
 
+## 2026-06-23 (続28) — 🎉 `led.toml` 複数ソース合成 `cb_ledtoml.py`(compose: keep/replace/combine を 1 リストで)
+
+issue #19(製品化バックログ消化後の新機能、ユーザー選択)。GIF/recipe 単体(続16/17)を超えて
+**複数ソースを slot ごとに連結・差替**する宣言的マニフェスト `led.toml` を `cyberboard compose` として実装。
+miaomerge `merge_configurations.rs` を参照実装に、その action triplet を **per-slot `sources` リスト**へ畳む。
+
+### 設計(advisor レビューで芯を締めた)
+
++ **新規モジュール `tools/cb_ledtoml.py`(193 行)**: cb_led(440)/cb_anim(475)が共に 400 行超のため拡張せず分離。
+  `cb_led.frames_to_page`(256 cap + frame_index 振り直し + per-key keyframes 維持)/ `_gif_frames` / `_page` /
+  `_slot_to_page` と `cb_anim.EFFECTS` を再利用。CLI は `compose` 単一アクション(subparser 不要)で cli.py 配線。
++ **`sources` リストが action triplet を包含**: 省略 = keep / 1 個 = replace / 複数 = combine(連結)。
+  異種ソース(`recipe`/`gif`/`config`)混在 + recipe 統合まで拡張。パスは**マニフェスト相対**で解決。
++ **256 cap は compose 層で per-source 報告**(advisor #1, silent cap 禁止の新 seam への適用): 各ソースが
+  full / `truncated to K` / `DROPPED` のどれかを stdout に列挙 + 末尾 drop 数を warn。
++ **recipe は cap なしで raw 展開**(advisor #2): `_render_recipe` を使うと内部 cap + `cb_anim:` 警告が二重化する
+  → `cb_anim.EFFECTS` を直接回す薄い `_recipe_frames` で raw frames を得て、cap を compose 層に一元化。
+  `frames_to_page` には ≤256 を渡すので再警告も起きない。
++ **base は完全 IR 必須**(LED 読み戻し不可)。display `frames` のみ合成、`keyframes` は base 維持(gif2ir 不変条件)。
+  例 `led.toml` は**コミット可能な recipe ソースのみ**参照(advisor #4。merged/工場 config は gitignore ローカル)。
+
+### 検証 🟢(`$CLAUDE_JOB_DIR/tmp/verify_compose.py`、26 アサート全 pass、ローカル merged を base に)
+
++ **roundtrip**: `{config=<merged>, slot=N}` ソースで slot N の `frame_RGB` を**バイト一致**再現 + frame_index 0..N-1。
++ **combine 合計**: 2 ソース(66+53)→ frame_num=119。
++ **256 cap + 報告**: slot2(125)×4=500 → frame_num=256、3 個目 `truncated to 6` / 4 個目 `DROPPED` / 末尾 244 drop warn。
++ **keyframes 維持** + **keep**(省略 slot の page は base と完全一致) + **display frames は置換されている**。
++ **gif ソース**(ローカル生成 gif から)/ **エラー系 8 種**(複数 kind・kind 無し・空 sources・index 欠落・
+  不正 resample・[[slot]] 無し・未知 effect・base 無し)が全て clean SystemExit(traceback 無し)。
++ 例 `examples/led/compose.toml` を実 base で compose → `cyberboard verify` pass。find-debug クリーン。
+
+### 反映 + 次
+
++ `40`(led.toml セクションを「将来」→実装済みに全面更新、M3/M5 残リスト更新)/ README(compose コマンド行 + 例)。
++ 🔴 残: judge-panel 並列(v2)/ TUI エディタ。`led.toml` 自体は完了。実機 end-to-end(compose→write→目視)は別途。
+
+---
+
 ## 2026-06-23 (続27) — #6 後半②: LED デザイン vision ループを `cyberboard-led` スキルに内蔵(全効果デザイナー)
 
 issue #6 後半の本体。montage プリミティブ(続26)の上に、**おまかせデザイン = エージェントが montage を
