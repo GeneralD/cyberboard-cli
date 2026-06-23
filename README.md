@@ -172,29 +172,25 @@ Per client:
 ## Claude Code plugin
 
 For [Claude Code](https://claude.ai/code), the plugin auto-configures the
-`cyberboard` MCP server — no hand-editing of `mcpServers`.
+`cyberboard` MCP server — no hand-editing of `mcpServers`, and **no separate
+package install needed**.
 
-**Step 1 — in your terminal,** install the package so the `cyberboard-mcp`
-command is on `PATH` (this is a prerequisite, not optional):
-
-```sh
-uv tool install 'cyberboard-cli[mcp]'   # or: pipx install / pip install
-```
-
-**Step 2 — inside Claude Code** (these are slash commands, not shell), add this
-repo as a plugin marketplace and install the plugin:
+**Inside Claude Code** (these are slash commands, not shell), add this repo as a
+plugin marketplace and install the plugin:
 
 ```text
 /plugin marketplace add GeneralD/cyberboard-cli
 /plugin install cyberboard@cyberboard-cli
 ```
 
-Enabling the plugin starts the server automatically — that's it.
+Enabling it starts the server automatically. The MCP entry **self-bootstraps**
+via `uvx --from 'cyberboard-cli[mcp,led]' cyberboard-mcp` — uvx fetches the
+package on first launch (LED tools included, pillow from a wheel — no source
+build) and caches it thereafter.
 
-> **Order matters:** the plugin points at the `cyberboard-mcp` console script, so
-> enabling it *before* installing the package makes the server fail to start
-> (`cyberboard-mcp` not on `PATH`). Install first, then enable. The plugin
-> manifest lives at `plugins/cyberboard/` and the marketplace manifest at
+> **Prerequisite:** [`uv`](https://docs.astral.sh/uv/) (for `uvx`). Nothing else
+> to install — the plugin pulls the server itself. The plugin manifest lives at
+> `plugins/cyberboard/` and the marketplace manifest at
 > `.claude-plugin/marketplace.json` (both in this repo).
 
 ## Why
