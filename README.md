@@ -14,50 +14,69 @@ sources**, and write them straight to the board from the command line — robust
 without AM Master's flaky connection.
 
 > **Status:** the write protocol is fully reverse-engineered, and the `cyberboard`
-> CLI is implemented and installable (see **Install** below). Writing and keymap
+> CLI is implemented and published (see **Install** below). Writing and keymap
 > read-back are **verified on real R4 hardware**; keymap authoring (TOML) and LED
-> display authoring (GIF / declarative recipes) work today. Still WIP: per-key LED
-> authoring, the MCP server, and the Claude plugin. The self-contained protocol
-> spec lives under [`.claude/rules/`](.claude/rules/) (Japanese).
+> display authoring (GIF / declarative recipes) work today, and the MCP server and
+> Claude Code plugin ship alongside the CLI. Still WIP: per-key LED authoring. The
+> self-contained protocol spec lives under [`.claude/rules/`](.claude/rules/) (Japanese).
 
 ## Install
 
-Requires **Python ≥ 3.11**. Dependencies are split into a small core plus
-optional extras, so a keymap-only or device-only setup stays lean:
+**Prerequisite:** Python ≥ 3.11. Every method below installs the same package
+([`cyberboard-cli` on PyPI](https://pypi.org/project/cyberboard-cli/)) — they
+differ only in *how* it lands on your machine.
 
-- **core** — `pyserial`, for device I/O (`devices` / `read` / `write` / `doctor`).
-- **`[led]`** — `pillow`, for LED authoring (`led` / `anim`).
-- **`[verify]`** — `jsonschema`, for strict schema validation in `verify`
-  (it falls back to basic checks without it).
-- **`[all]`** — everything (`pillow` + `jsonschema`).
+### Which installer should I pick?
 
-Published on [PyPI](https://pypi.org/project/cyberboard-cli/) — pick whichever installer you like:
+| If you want… | Use | You get |
+|---|---|---|
+| macOS, simplest, shell completion wired for you | **Homebrew** | core (device I/O) |
+| One isolated global command, any OS | **uv tool** or **pipx** | core + whatever extras you ask for |
+| It inside a project / existing venv | **pip** | core + extras |
+| To try it once without installing | **uvx** | ephemeral, extras on the fly |
+
+### Pick your extras
+
+The package is a small core plus opt-in extras, so a device-only or keymap-only
+setup stays lean. Add them in brackets, e.g. `'cyberboard-cli[led,verify]'`:
+
+| Extra | Pulls in | Needed for |
+|---|---|---|
+| *(core)* | `pyserial` | device I/O + keymap build — `devices` / `read` / `write` / `doctor` / `build` |
+| `[led]` | `pillow` | LED authoring — `led` / `anim` / `compose` |
+| `[verify]` | `jsonschema` | strict schema checks in `verify` (degrades to basic checks without it) |
+| `[mcp]` | `mcp` | the `cyberboard-mcp` server — see [MCP server](#mcp-server) |
+| `[all]` | all of the above | everything |
+
+### Commands
 
 ```sh
-# Homebrew (macOS) — device I/O + shell completion auto-wired (bash/zsh/fish):
+# Homebrew (macOS) — device I/O + bash/zsh/fish completion auto-wired:
 brew install GeneralD/tap/cyberboard-cli
 
-# Run once, no install (ephemeral) — with LED authoring:
-uvx --from 'cyberboard-cli[led]' cyberboard --help
-
-# Install as a persistent tool (uv):
+# uv tool — isolated global command (recommended for the full feature set):
 uv tool install cyberboard-cli                 # core only
 uv tool install 'cyberboard-cli[led]'          # + LED authoring
 
-# Or pipx / pip into a venv:
+# pipx — isolated global command:
 pipx install 'cyberboard-cli[led]'
+
+# pip — into the currently-active venv:
 pip install 'cyberboard-cli[led]'
+
+# uvx — run once, nothing installed:
+uvx --from 'cyberboard-cli[led]' cyberboard --help
 ```
 
-> **Homebrew is core-only** (device I/O). LED authoring (`anim` / `led` /
-> `compose` rendering) needs `pillow`, which would force a ~30-minute source
-> build under brew, so it's not bundled there — use `uv tool install
-> 'cyberboard-cli[led]'` (or pipx / pip) for the full feature set.
+> **Homebrew is core-only.** LED authoring (`anim` / `led` / `compose`) needs
+> `pillow`, which would force a ~30-minute source build under brew (the tap ships
+> no prebuilt bottles), so it isn't bundled there. For LED on every platform, use
+> `uv tool install 'cyberboard-cli[led]'` (or pipx / pip).
 
-From a clone, run it without installing via uv:
+**Developing on a clone?** Run it straight from the source tree, no install:
 
 ```sh
-uv run --extra led cyberboard --help     # LED commands need --extra led; device commands don't
+uv run --extra led cyberboard --help   # device commands don't need --extra led
 ```
 
 ## Usage
@@ -100,52 +119,83 @@ cyberboard completion fish > ~/.config/fish/completions/cyberboard.fish    # fis
 
 ## MCP server
 
-The same operations are available to MCP clients (Claude, editors, agents) via a
-stdio server that wraps the CLI — so the MCP surface never drifts from the CLI.
+Every CLI operation is also exposed to MCP clients (Claude Desktop, Claude Code,
+editors, AI agents) through a small **stdio** server that simply wraps the CLI —
+so the MCP tool surface never drifts from the CLI's behaviour.
+
+**1. Install with the `[mcp]` extra** so the `cyberboard-mcp` command is on your
+`PATH` (add `[led]` too if you want the LED tools to render inside the server):
 
 ```sh
-pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp]'
-cyberboard-mcp                       # serves over stdio
+uv tool install 'cyberboard-cli[mcp]'        # or: pipx install / pip install
+uv tool install 'cyberboard-cli[mcp,led]'    # + LED tools (render/preview/gif)
+cyberboard-mcp                               # quick check: serves over stdio (Ctrl-C to quit)
 ```
 
-Point a client at the `cyberboard-mcp` command (stdio). Example client config:
+**2. Register it with your client** — the command must be on the client's `PATH`:
 
 ```json
 { "mcpServers": { "cyberboard": { "command": "cyberboard-mcp" } } }
 ```
 
-Tools: `list_devices` · `device_info` · `doctor` · `verify` · `build_keymap` ·
-`render_animation` · `preview_animation` · `gif_to_ir` · `ir_to_gif` ·
-`read_keymap` · `write_config`. `write_config` is destructive and defaults to a
-dry run (pass `execute=true` to actually write). LED tools need the `[led]`
-extra in the same environment.
+Per client:
+
+- **Claude Code** — just use the [plugin](#claude-code-plugin) below; it wires
+  the server for you, no JSON editing.
+- **Claude Desktop / Cursor / editors** — paste the JSON above into the client's
+  MCP config. If it can't find the command, give an absolute path
+  (`which cyberboard-mcp`) or run it through uvx (no separate install needed):
+
+  ```json
+  { "mcpServers": { "cyberboard": {
+      "command": "uvx",
+      "args": ["--from", "cyberboard-cli[mcp]", "cyberboard-mcp"] } } }
+  ```
+
+- **[mcpm](https://mcpm.sh) users** — register it once and add it to a profile:
+
+  ```sh
+  mcpm new cyberboard --type stdio --command uvx \
+    --args "--from cyberboard-cli[mcp] cyberboard-mcp"
+  mcpm profile edit base --add-server cyberboard
+  ```
+
+**Tools (11):** `list_devices` · `device_info` · `doctor` · `verify` ·
+`build_keymap` · `render_animation` · `preview_animation` · `gif_to_ir` ·
+`ir_to_gif` · `read_keymap` · `write_config`.
+
+> `write_config` is destructive and defaults to a **dry run** — pass
+> `execute=true` to actually write to the board. The LED tools
+> (`render_animation` / `preview_animation` / `gif_to_ir` / `ir_to_gif`) need the
+> `[led]` extra in the same environment.
 
 ## Claude Code plugin
 
-If you use Claude Code, install the plugin to get the `cyberboard` MCP server
-auto-configured — no hand-editing of `mcpServers`.
+For [Claude Code](https://claude.ai/code), the plugin auto-configures the
+`cyberboard` MCP server — no hand-editing of `mcpServers`.
 
-First, **in your terminal**, install the package so the `cyberboard-mcp`
-command is on `PATH`:
+**Step 1 — in your terminal,** install the package so the `cyberboard-mcp`
+command is on `PATH` (this is a prerequisite, not optional):
 
 ```sh
-pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp]'
+uv tool install 'cyberboard-cli[mcp]'   # or: pipx install / pip install
 ```
 
-Then, **inside Claude Code** (these are Claude Code slash commands, not shell),
-add this repo as a plugin marketplace and install the plugin:
+**Step 2 — inside Claude Code** (these are slash commands, not shell), add this
+repo as a plugin marketplace and install the plugin:
 
 ```text
 /plugin marketplace add GeneralD/cyberboard-cli
 /plugin install cyberboard@cyberboard-cli
 ```
 
-The plugin's MCP server points at the `cyberboard-mcp` console script, so the
-package install is the prerequisite: **if you enable the plugin before installing
-the package, the server fails to start** (`cyberboard-mcp` is not on `PATH`).
-Once the package is installed, enabling the plugin starts the server
-automatically. The plugin manifest lives at `plugins/cyberboard/`, and the
-marketplace manifest at `.claude-plugin/marketplace.json` (both in this repo).
+Enabling the plugin starts the server automatically — that's it.
+
+> **Order matters:** the plugin points at the `cyberboard-mcp` console script, so
+> enabling it *before* installing the package makes the server fail to start
+> (`cyberboard-mcp` not on `PATH`). Install first, then enable. The plugin
+> manifest lives at `plugins/cyberboard/` and the marketplace manifest at
+> `.claude-plugin/marketplace.json` (both in this repo).
 
 ## Why
 
