@@ -4,7 +4,7 @@
   <img src="assets/hero.jpg" alt="cyberboard-cli — write CyberBoard R4 config from the terminal" width="420">
 </p>
 
-![status](https://img.shields.io/badge/status-CLI%20usable%20·%20WIP-success) ![platform](https://img.shields.io/badge/platform-macOS-blue) ![target](https://img.shields.io/badge/target-CyberBoard%20R4-blue) ![python](https://img.shields.io/badge/python-%3E%3D3.11-blue) ![install](https://img.shields.io/badge/install-uv%20%2F%20pip-blue) ![protocol](https://img.shields.io/badge/protocol-reverse--engineered-purple) ![transport](https://img.shields.io/badge/transport-USB%20CDC%20serial-success) ![license](https://img.shields.io/badge/license-MIT-green)
+![status](https://img.shields.io/badge/status-CLI%20usable%20·%20WIP-success) ![platform](https://img.shields.io/badge/platform-macOS-blue) ![target](https://img.shields.io/badge/target-CyberBoard%20R4-blue) ![python](https://img.shields.io/badge/python-%3E%3D3.11-blue) ![PyPI](https://img.shields.io/pypi/v/cyberboard-cli) ![install](https://img.shields.io/badge/install-brew%20%7C%20pip%20%7C%20uv-blue) ![protocol](https://img.shields.io/badge/protocol-reverse--engineered-purple) ![transport](https://img.shields.io/badge/transport-USB%20CDC%20serial-success) ![license](https://img.shields.io/badge/license-MIT-green)
 
 A CLI — and the protocol knowledge base behind it — for writing **AngryMiao
 CyberBoard R4** configuration **without the official AM Master app**.
@@ -31,20 +31,28 @@ optional extras, so a keymap-only or device-only setup stays lean:
   (it falls back to basic checks without it).
 - **`[all]`** — everything (`pillow` + `jsonschema`).
 
-Not on PyPI yet, so install straight from git (the default branch is `main`):
+Published on [PyPI](https://pypi.org/project/cyberboard-cli/) — pick whichever installer you like:
 
 ```sh
+# Homebrew (macOS) — device I/O + shell completion auto-wired (bash/zsh/fish):
+brew install GeneralD/tap/cyberboard-cli
+
 # Run once, no install (ephemeral) — with LED authoring:
-uvx --from 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli' cyberboard --help
+uvx --from 'cyberboard-cli[led]' cyberboard --help
 
 # Install as a persistent tool (uv):
-uv tool install 'git+https://github.com/GeneralD/cyberboard-cli'                              # core only
-uv tool install 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli'        # + LED
+uv tool install cyberboard-cli                 # core only
+uv tool install 'cyberboard-cli[led]'          # + LED authoring
 
 # Or pipx / pip into a venv:
-pipx install 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli'
-pip install 'cyberboard-cli[led] @ git+https://github.com/GeneralD/cyberboard-cli'
+pipx install 'cyberboard-cli[led]'
+pip install 'cyberboard-cli[led]'
 ```
+
+> **Homebrew is core-only** (device I/O). LED authoring (`anim` / `led` /
+> `compose` rendering) needs `pillow`, which would force a ~30-minute source
+> build under brew, so it's not bundled there — use `uv tool install
+> 'cyberboard-cli[led]'` (or pipx / pip) for the full feature set.
 
 From a clone, run it without installing via uv:
 
@@ -96,7 +104,7 @@ The same operations are available to MCP clients (Claude, editors, agents) via a
 stdio server that wraps the CLI — so the MCP surface never drifts from the CLI.
 
 ```sh
-pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp] @ git+https://github.com/GeneralD/cyberboard-cli'
+pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp]'
 cyberboard-mcp                       # serves over stdio
 ```
 
@@ -121,7 +129,7 @@ First, **in your terminal**, install the package so the `cyberboard-mcp`
 command is on `PATH`:
 
 ```sh
-pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp] @ git+https://github.com/GeneralD/cyberboard-cli'
+pip install 'cyberboard-cli[mcp]'    # or: uv tool install 'cyberboard-cli[mcp]'
 ```
 
 Then, **inside Claude Code** (these are Claude Code slash commands, not shell),
@@ -195,9 +203,10 @@ Done:
   - an in-terminal player (`led play`, half-block truecolor) and a frame
     montage (`anim montage`) for judging motion/loop in a still viewer.
 
-Productization (in progress): a unified `cyberboard` CLI core (done), standalone
-packaging (this), then an MCP server and a Claude plugin that all call the same
-core — plus per-key LED authoring and a sprite/vision LED design loop.
+Productization ✅ a unified `cyberboard` CLI core, standalone packaging
+(published to PyPI + a Homebrew tap), an MCP server (`cyberboard-mcp`), and a
+Claude Code plugin — all calling the same core. Next: per-key LED authoring and
+a sprite/vision LED design loop.
 
 > Note: partial writes are **not** supported by firmware (`JSON_START` erases the
 > whole config), so "swap just the LED" is done by read → merge → full write, not
