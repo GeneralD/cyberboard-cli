@@ -1,0 +1,38 @@
+# led.toml — multi-source LED slot composition for `cyberboard compose`.
+#
+#   cyberboard compose -m examples/led/compose.toml -b your-exported-config.json -o out.json
+#
+# Each [[slot]]'s `sources` are concatenated in order; that one list covers
+# miaomerge's three actions:
+#   * omit a slot   -> keep    (left untouched in the base)
+#   * one source    -> replace (that slot's display frames)
+#   * many sources  -> combine (concatenated; frame_index renumbered; capped at 256)
+# Only the display layer (40x5 `frames`) is composed — per-key `keyframes` ride
+# unchanged from the base, so the base must be a complete IR you exported from
+# AM Master / the official web UI (LED has no device read-back).
+#
+# Source paths are resolved relative to THIS file. Each source is exactly one of:
+#   { recipe = "x.json" }            a cb_anim recipe (see anim)
+#   { gif    = "x.gif" }             downsampled to 40x5 (see led gif2ir)
+#   { config = "x.json", slot = 2 }  a slot's frames from another IR config
+
+[meta]
+# base = "your-exported-config.json"   # or pass -b on the command line
+
+# slot 1 = combine: a scrolling banner, then a hue cycle, back to back.
+[[slot]]
+index = 1
+speed_ms = 70
+sources = [
+  { recipe = "text-scroll.json" },
+  { recipe = "pattern-hue.json" },
+]
+
+# slot 2 = replace: a single source overwrites the slot's display frames.
+[[slot]]
+index = 2
+sources = [
+  { recipe = "pattern-stripes.json" },
+]
+
+# slot 3 = keep: omitted entirely, so the base's slot 3 is left as-is.

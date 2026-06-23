@@ -220,29 +220,43 @@ cb_anim.py montage -r recipe.json -o sheet.png [--scale 8] [--max 24] [--no-seam
   判定できない)。
 - 例: `examples/led/{text-scroll,sequence,sprite-scroll}.json`(sprite は `examples/led/sprite.png` 同梱)。
 
-### LED `led.toml`(将来: 複数ソース合成のマニフェスト)
+### LED `led.toml`: 複数ソース合成(`cb_ledtoml.py` 🟢 実装済み)
 
-GIF 単体を超えて「複数ソースを slot ごとに合成」したくなったら toml マニフェストを被せる:
+GIF 単体を超えて「複数ソースを slot ごとに合成」する toml マニフェスト。`90` 続28、issue #19。
 
-```toml
-# スロット = page 5/6/7(Custom LED 1/2/3)
-[[slot]]
-index = 1                # スロット1 (= page 5)
-source = "nyan_cat.gif"  # GIF(cb_led で取り込み)/ 既存 JSON ページ / merger 資産
-lightness = 100
-speed_ms = 34
-
-[[slot]]
-index = 2
-source = "matrix.json"   # 既存 JSON の Custom LED ページ
+```text
+cb_ledtoml.py compose -m led.toml [-b base.json] -o config.json   # マニフェスト → 完全 IR
 ```
 
-- スロットのソースは「GIF」「既存 JSON の Custom LED ページ」「merger 資産」のいずれか。
-- merger のアニメ合成(連結・差し替え)機能はここに取り込む候補。
-  - **参照実装**: `miaomerge`(merger の Tauri/Rust 版)の `merge_configurations.rs`。
-    アクション `keep`/`replace`(置換)/`combine`(連結+`frame_num`再計算)。型付きで読みやすい。
-    **ただし `frames`(200px)しか合成しない** — per-key(`keyframes`)も混ぜたいなら build 側で
-    両方扱う(`90` 2026-06-21 参照)。
+```toml
+[meta]
+base = "exported-config.json"   # 完全 IR base(必須。-b でも可)
+
+[[slot]]
+index = 1                        # 1/2/3 -> page 5/6/7
+speed_ms = 70                    # 任意・スロット全体(省略時は最初の gif の duration)
+lightness = 100                  # 任意
+resample = "nearest"            # 任意(gif ソース用 nearest|lanczos|box)
+sources = [                      # 順に連結。1 個 = replace / 複数 = combine / slot 省略 = keep
+  { recipe = "text-scroll.json" },        # cb_anim レシピ(エフェクト展開)
+  { gif = "logo.gif" },                   # 40×5 ダウンサンプル(led gif2ir と同じ)
+  { config = "other.json", slot = 2 },    # 別 IR の slot の display frames(slot 省略時=外側 index)
+]
+```
+
+- **keep / replace / combine を `sources` で表現**: スロット省略 = keep、ソース 1 個 = replace、
+  複数 = combine(連結)。miaomerge の action triplet を包含しつつ異種ソース混在 + recipe 統合に拡張。
+- **ソース種別**(各 entry に 1 つ): `recipe`(`cb_anim.EFFECTS` で展開・cap なし=compose 層が cap を一元管理)
+  / `gif`(`cb_led._gif_frames`)/ `config`(別 IR の page から `frame_RGB` 抽出)。パスは**マニフェスト相対**。
+- **display `frames`(200px)のみ合成**、per-key `keyframes` は base 維持(gif2ir 不変条件)。base は完全 IR 必須
+  (LED は読み戻し不可)。出力は完全 IR(`write`/`verify` 可)。
+- **256 cap は compose 層で per-source 報告**(silent cap 禁止): どのソースが full / truncated / DROPPED かを
+  stdout に列挙 + 末尾 drop 数を warn。`cb_led.frames_to_page` には ≤256 を渡すので二重 cap/警告にならない。
+- **参照実装**: `miaomerge`(merger の Tauri/Rust 版)の `merge_configurations.rs`。アクション
+  `keep`/`replace`(置換)/`combine`(連結+`frame_num`再計算)。**`frames`(200px)しか合成しない**点も同じ。
+- **検証済み 🟢**(`90` 続28, `tmp/verify_compose.py` 26 アサート): roundtrip(`config` ソースで slot を
+  バイト一致再現)/ combine 合計 / 256 cap + per-source 報告 / keyframes 維持 / keep / gif ソース / エラー系。
+- 例: `examples/led/compose.toml`(コミット可能な recipe ソースのみ。combine/replace/keep を実演)。
 
 ## CLI コマンド構成(案)
 
@@ -320,7 +334,8 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
    - **`cb_build.py`**: `-k keymap.toml [-b base] -o config.json`(build)/ `--dump config.json [--full]`
      (IR→toml)。純粋 file→file。**ラウンドトリップ実証**: 工場 dump(--full)を別 base 上で build →
      **key_layer 1400/1400 完全一致** + swap/macro/fn 再現(`build(dump(C)) == C`)。schema 検証 pass。
-   - 🔴 残: LED `led.toml` ソースからの合成(現状 LED は base から継承=「keymap だけ変更」は成立)。
+   - LED `led.toml` ソースからの合成は **M5 で達成**(`cb_ledtoml.py` compose、下記)。build は keymap 専任、
+     LED は base 継承 or compose で合成、と責務分離(「keymap だけ変更」は build で成立)。
 5. **M4**: 堅牢化(接続安定化)。部分書込は firmware 非対応(続8)のため不要 —
    分離管理は「read→merge→フル書込」で M3 build が吸収する。
 6. **M5**: LED オーサリング — ✅ **GIF↔IR コーデック達成**(`tools/cb_led.py`, `90` 続16)。
@@ -360,6 +375,11 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
      へ抽出)。sprite を効果カタログ + 「何を作る?」へ追加、**2b** で絵の用意(手持ち / AI 生成=Codex 可用時のみ
      40px 粗化明示 / PIL 手続き)を**毎回選ばせる**。dogfood 実証: `#330033` 暗紫が legibility 基準で落ち→
      `#cc44ff` で通過 = ループ収束(rubber-stamp せず)。
+   - **`led.toml` 複数ソース合成 達成**(`tools/cb_ledtoml.py`, `90` 続28, issue #19): `cyberboard compose
+     -m led.toml [-b base] -o config.json`。per-slot `sources` リスト(複数=combine / 1 個=replace /
+     省略=keep)で miaomerge の action triplet を包含 + 異種ソース(recipe/gif/config)混在。`cb_led.
+     frames_to_page` で 256 cap + frame_index 振り直し + keyframes 維持。256 cap は compose 層で per-source
+     報告(silent cap 禁止)。`tmp/verify_compose.py` 26 アサート(roundtrip バイト一致ほか)pass。
+     例 `examples/led/compose.toml`。
    - 🔴 残: **judge-panel 並列(v2)**(N パラメータ変種を montage→vision で選抜 → ultracode 並列。
-     その時ループを `plugins/cyberboard/agents/` の forked subagent へ抽出)/ `led.toml` マニフェスト
-     (複数ソース合成)/ TUI エディタ。
+     その時ループを `plugins/cyberboard/agents/` の forked subagent へ抽出)/ TUI エディタ。

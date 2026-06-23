@@ -51,6 +51,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "verify": ("cb_verify", [], "validate an IR config against the schema"),
     "led": ("cb_led", [], "GIF <-> IR display codec + terminal player (gif2ir / ir2gif / play / recipe)"),
     "anim": ("cb_anim", [], "render declarative LED animations (render / preview / montage)"),
+    "compose": ("cb_ledtoml", [], "compose a led.toml manifest (multi-source slots) -> IR"),
     "read": ("cb_read", [], "read config back from the device (keymap)"),
     "write": ("cb_write", [], "write an IR config to the device"),
     "set-time": ("cb_settime", [], "set the device RTC clock"),
