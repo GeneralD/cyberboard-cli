@@ -68,6 +68,7 @@ uv run --extra led cyberboard --help     # LED commands need --extra led; device
 | `read` | Read config back from the device (`keymap`) |
 | `write` | Write an IR config to the device |
 | `set-time` | Set the device RTC clock |
+| `completion` | Print a shell completion script (`bash` / `zsh` / `fish`) |
 
 ```sh
 cyberboard devices                                              # find your board
@@ -76,6 +77,17 @@ cyberboard led play -i preview.gif                              # play it right 
 cyberboard compose -m examples/led/compose.toml -b base.json -o config.json   # combine many sources per slot
 cyberboard build -k keymap.toml -b base.json -o config.json     # build a config from a TOML keymap
 cyberboard write config.json --execute                          # write it (omit --execute for a dry run)
+```
+
+### Shell completion
+
+`cyberboard completion <shell>` prints a completion script. Homebrew wires this
+up automatically; for a pip/uv install, install it manually:
+
+```sh
+cyberboard completion zsh  > "${fpath[1]}/_cyberboard"            # zsh (then restart)
+cyberboard completion bash > /usr/local/etc/bash_completion.d/cyberboard   # bash
+cyberboard completion fish > ~/.config/fish/completions/cyberboard.fish    # fish
 ```
 
 ## MCP server
