@@ -202,10 +202,15 @@ cb_anim.py preview -r recipe.json -o art.gif [--scale 16]                       
     `direction`。**`gap:0`=継ぎ目なしトーラスタイリング**(`HELLOHELLO…`)、`gap:40`=画面外まで
     流れて再入。フォントは **tom-thumb(5px, MIT, vendored `tools/fonts/`)**。40×5 で legibility 実描画確認済。
   - `solid`(単色を N フレーム保持): `color` / `frames`。区切り・連結の間に使う。
+  - `hue_cycle` / `stripes` / `gradient_scroll`(手続き的・模様 marquee, `90` 続18)。
+  - `sprite`(スプライト系=外部の絵を読込, `90` 続25): `sprite`(画像パス・必須)/ `step` /
+    `gap` / `direction`(`up`/`down`)/ `bg` / `resample`。縦長画像を幅 40px 合わせ・高さ比例で
+    5px 窓を縦スクロール。**継ぎ目は text_scroll と逆**: 任意の絵は `gap:0`=上端↔下端ジャンプ、
+    **綺麗なループは `gap>=5`**(空白↔空白接合)。`gap:0` は縦タイルする絵のみ継ぎ目なし。
 - **ユーザー要望の4ノブが揃う** 🟢(`90` 続17): ①継ぎ目なしループ=`gap:0`(seamless 実証:
   wrap フレームが 1px ずつ連続シフト、段差ゼロ)/ ②長さ=`step`(text)・`frames`(solid)/
   ③MAX256=生成時に警告して truncate(firmware 真値)/ ④短いの連結=`sequence`(merger `combine` 同型)。
-- 例: `examples/led/{text-scroll,sequence}.json`。
+- 例: `examples/led/{text-scroll,sequence,sprite-scroll}.json`(sprite は `examples/led/sprite.png` 同梱)。
 
 ### LED `led.toml`(将来: 複数ソース合成のマニフェスト)
 
@@ -319,12 +324,18 @@ ambctl diff   dump.json config.json   # 書き込み前後の差分確認
      `solid`。`render`(→IR+GIF)/ `preview`(→GIF のみ)。**4 ノブ実証**: ①継ぎ目なしループ
      (`gap:0` seamless)/ ②長さ(`step`/`frames`)/ ③MAX256(警告+truncate)/ ④連結(`sequence`)。
      cb_led を `frames_to_page`/`frames_to_gif` にリファクタしコーデック一本化。例 `examples/led/`。
+     模様 marquee(`hue_cycle`/`stripes`/`gradient_scroll`, `90` 続18)も追加。
+   - **キャラ縦スクロール(sprite)達成**(`tools/cb_anim.py`, `90` 続25, #6 前半): 縦長スプライト画像を
+     幅 40px 合わせ・高さ比例で 5px 窓を縦スクロール。`sprite`/`step`/`gap`/`direction`(`up`/`down`)/
+     `bg`/`resample`。**継ぎ目は text_scroll と逆**(任意の絵は `gap>=5` が綺麗なループ)。256 cap は
+     sprite 特化警告(絵の下端が切れる→step を上げよ)。**montage 目視で空間正しさ確定**(赤マーカー線が
+     1px/frame 上昇/下降・gap=bg 黒帯)。例 `examples/led/sprite-scroll.json` + 自作 `sprite.png`。
    - **ターミナル再生 達成**(`cb_led play`, `90` 続22、issue #12): GIF/IR slot を半角上ブロック `▀` で
      truecolor 再生(fg=上px/bg=下px → 40×5 を 40 文字 × 3 行)。`--once`/`--loop`/`--fps`/`--scale`、
      非 TTY 静止縮退、Ctrl-C 復元。IR slot は pillow 不要。書込前確認・コミュニティ GIF プレビューが端末で完結。
    - **per-key(keyframes)GIF は未対応** 🔴: web 抽出の物理配置はあるが(`experiments/perkey-layout/`
      83 LED + `render_tui.py`)、**web-index ↔ keyframes-90 の対応が未確定**(export 相関パス要)。
      display は 1:1 マップ既知なので今すぐ可、per-key だけがこのマップ待ち。
-   - 🔴 残: **キャラ縦スクロール(スプライト)エフェクト + LED デザイン agent**(生成→render→vision で
-     目視→批評→改訂ループ。3原型のうちスプライト系のみ agent の価値が出る)/ 模様回転(pattern marquee)
-     エフェクト / `led.toml` マニフェスト(複数ソース合成)/ TUI エディタ。
+   - 🔴 残: **LED デザイン vision ループ agent**(#6 後半・別 PR: prompt→sprite 生成→render/ir2gif→
+     vision で目視批評→改訂。sprite ソース=画像/AI 生成の設計フォーク有り。plugin skill `cyberboard-led`
+     の効果カタログへ sprite 追加もこの PR で)/ `led.toml` マニフェスト(複数ソース合成)/ TUI エディタ。

@@ -1,0 +1,10 @@
+{
+  "slot": 1,
+  "speed_ms": 90,
+  "effect": "sprite",
+  "sprite": "examples/led/sprite.png",
+  "direction": "up",
+  "step": 1,
+  "gap": 8,
+  "bg": "#000000"
+}

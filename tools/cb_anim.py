@@ -275,12 +275,91 @@ def _effect_gradient_scroll(seg: dict) -> list[list[str]]:
     return frames
 
 
+# --- effects (sprite family — externally-loaded artwork) -------------------------
+
+def _load_sprite(seg: dict) -> list[list[str]]:
+    """Load a sprite image, fit its width to 40px (keeping the vertical axis — the
+    scroll axis — at full proportional height), and return an N-row x 40-col grid of
+    '#RRGGBB'. Uses the first frame of an animated GIF. Lazy PIL import (the [led]
+    extra), matching cb_led."""
+    path = seg.get("sprite")
+    if not path:
+        raise SystemExit("cb_anim: sprite needs a 'sprite' image path")
+    src = Path(path)
+    if not src.exists():
+        raise SystemExit(f"cb_anim: sprite not found: {src}")
+    from PIL import Image
+    modes = {"nearest": Image.Resampling.NEAREST, "lanczos": Image.Resampling.LANCZOS,
+             "box": Image.Resampling.BOX}
+    resample = seg.get("resample", "nearest")
+    if resample not in modes:
+        raise SystemExit(f"cb_anim: sprite resample must be one of {sorted(modes)}, "
+                         f"got {resample!r}")
+    try:
+        with Image.open(src) as im:  # context manager so the file handle isn't leaked
+            im.seek(0)  # first frame of an animated GIF
+            rgb = im.convert("RGB")  # independent copy — safe to use after the file closes
+    except OSError as e:
+        raise SystemExit(f"cb_anim: cannot read sprite {src} as an image: {e}")
+    ow, oh = rgb.size
+    nh = round(oh * W / ow)  # fit width to 40, keep height proportional (the scroll axis)
+    if nh < H:
+        raise SystemExit(f"cb_anim: sprite too short — fits to {W}x{nh}, need height "
+                         f">= {H} for a vertical scroll (use a taller image)")
+    fit = rgb.resize((W, nh), modes[resample])
+    px = fit.load()
+    return [["#%02x%02x%02x" % px[x, y] for x in range(W)] for y in range(nh)]
+
+
+def _effect_sprite(seg: dict) -> list[list[str]]:
+    """Vertical marquee: slide the 5px display window up (or down) a tall sprite image
+    (width-fit to 40px, full proportional height = the scroll axis). The 'キャラ縦
+    スクロール' archetype.
+
+    Loop semantics are the INVERSE of text_scroll's. For arbitrary artwork, gap=0 wrap
+    joins the sprite's top edge directly to its bottom edge — a visible jump unless the
+    art tiles vertically. The clean loop here is gap>0 (scroll fully off into `bg`, then
+    re-enter): the blank-to-blank join is what's seam-free. So set gap>=5 for a one-shot
+    scroll that loops cleanly; gap=0 only if your sprite tiles vertically."""
+    grid = _load_sprite(seg)
+    n_rows = len(grid)
+    step = max(1, int(seg.get("step", 1)))
+    gap = max(0, int(seg.get("gap", 0)))
+    bg = _color(seg.get("bg", "#000000"))
+    direction = seg.get("direction", "up")
+    if direction not in ("up", "down"):
+        raise SystemExit(f"cb_anim: sprite direction must be up/down, got {direction!r}")
+    total = n_rows + gap  # rows the window cycles through (sprite + blank gap)
+    nframes = math.ceil(total / step)
+    if total % step:
+        _warn(f"sprite: scroll height {total} not divisible by step {step} — loop may jitter")
+    if nframes > MAX_FRAMES:
+        _warn(f"sprite: {n_rows}px-tall sprite at step {step} needs {nframes} frames > "
+              f"{MAX_FRAMES}/slot — the scroll is truncated before it loops (later frames "
+              f"dropped); raise `step` to fit")
+    sign = 1 if direction == "up" else -1  # up = content rises (window offset increases)
+    frames: list[list[str]] = []
+    for i in range(nframes):
+        off = (sign * i * step) % total
+        flat = [bg] * PIXELS
+        for wy in range(H):  # window row -> display y; gap rows stay bg
+            src = (off + wy) % total
+            if src < n_rows:
+                row = grid[src]
+                base = wy * W
+                for x in range(W):
+                    flat[base + x] = row[x]
+        frames.append(flat)
+    return frames
+
+
 EFFECTS = {
     "text_scroll": _effect_text_scroll,
     "solid": _effect_solid,
     "hue_cycle": _effect_hue_cycle,
     "stripes": _effect_stripes,
     "gradient_scroll": _effect_gradient_scroll,
+    "sprite": _effect_sprite,
 }
 
 
