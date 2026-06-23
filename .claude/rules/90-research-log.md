@@ -4,6 +4,47 @@
 
 ---
 
+## 2026-06-24 (続29) — #31 レイヤ合成 + 透過 bg(おまかせ基準強化)/ 「全部開始」#30/#31/#32 完了
+
+スキル改善3点(ユーザー指摘)を issue #30/#31/#32 に起票し ultracode「全部開始」で実装。#30(可変幅
+グリフ N/M/W 判読性 + `cb_font.py` 抽出)/ #32(slot 選択を作成時→書込時へ後ろ倒し)は merged。
+本 PR = **#31 レイヤ合成**。根因はユーザー指摘の2点:「①CLI に背景アニメ上へ文字を重ねる合成が無い
+②vision 基準が『読めるか』止まりで単調出力を rubber-stamp」。
+
+### CLI: レイヤ合成(`cb_anim.py`)
+
++ レシピに `layers: [<背景 effect>, <text_scroll(bg=transparent)>]`。`TRANSPARENT="none"` sentinel +
+  `_bg_color(seg)`(bg が None/transparent/none/null で透過)/ `_composite`(bottom→top パンチスルー、
+  残留 sentinel → `#000000`)/ `_render_segment`(layers vs 単一 effect dispatch)。`text_scroll` の bg を
+  `_bg_color` 経由に。layers ネスト/空は clean error。
++ **フレーム数ポリシー**: `n = math.lcm(*層長)`(自然な seamless 周期)、`> MAX_FRAMES` なら `max(層長)` に
+  落として「seam で位相ドリフトする」と警告。例 composite.json = lcm(24,18)=72 ≤256 で seamless。
++ **透過誤用ガードを全出力パスへ集約**(本 PR の追い込み): 当初 agent はガードを `cb_led.frames_to_page`
+  (write 経路)だけに置いたが、**preview/montage は `frames_to_gif` 経由でガードを素通り** → 生の
+  `ValueError(... 'on')` で汚く落ちた。`_render_recipe` に `_assert_opaque` を追加し **preview/montage/
+  render を均一に actionable な SystemExit** に(frames_to_page 側は write の backstop として存置)。
+
+### skill: vision 基準強化(3b)
+
++ 「ただのスクロールで終わっていないか(背景/色変化/縁取り等の視覚的アクセントがあるか)」を falsifiable
+  基準として追加。layers 合成をカタログ + メニューに掲載。
+
+### 検証 🟢
+
++ composite preview rc=0(72 frames @640×80)。frame0 白文字 #ffffff=77px が NEON グリフ形成、虹背景 33 色、
+  透過リーク無し(agent 検証)。誤用ガード = preview/montage/render の **3 パス全てで rc=1 + 同一の
+  actionable メッセージ**。plain text-scroll 回帰 OK。find-debug は `cb_anim.py` クリーン、`cb_led.py` は
+  `play` の `except KeyboardInterrupt: pass`(続22 で容認済み・本変更外)warning のみ。
++ ⚠ `cb_anim.py` = 510 行(400 ソフト上限超)。合成は render パイプラインの内在ロジック(`_composite`/
+  `_render_segment`)で、分離可能な font は #30 で `cb_font.py` へ抽出済み。さらなる分割は別案件として据え置き。
+
+### 次
+
++ judge-panel 並列(v2、N 変種を montage→vision 選抜)/ per-key GIF(web-index↔keyframes-90)/ TUI エディタ。
++ 実機 end-to-end(compose/layers → write → 目視)。
+
+---
+
 ## 2026-06-23 (続28) — 🎉 `led.toml` 複数ソース合成 `cb_ledtoml.py`(compose: keep/replace/combine を 1 リストで)
 
 issue #19(製品化バックログ消化後の新機能、ユーザー選択)。GIF/recipe 単体(続16/17)を超えて
