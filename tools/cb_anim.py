@@ -388,6 +388,23 @@ def _render_segment(seg: dict) -> list[list[str]]:
 
 # --- recipe -> frames ------------------------------------------------------------
 
+def _assert_opaque(frames: list[list[str]]) -> None:
+    """Fail cleanly if any TRANSPARENT sentinel survives to the codec boundary.
+
+    A bare ``bg: "transparent"`` used outside a ``layers`` compositor has nothing
+    beneath it to punch through to, so the sentinel ("none") would otherwise reach
+    a codec and crash ungracefully — ``frames_to_gif`` (preview/montage) chokes on
+    it, and ``frames_to_page`` (write) has its own backstop guard. Catching it here
+    makes *every* output path fail with the same actionable message.
+    """
+    leak = next((i for i, f in enumerate(frames) if TRANSPARENT in f), None)
+    if leak is not None:
+        raise SystemExit(
+            f"cb_anim: transparent bg at frame {leak} has nothing beneath it — "
+            f"bg='transparent' is only valid inside a 'layers' composite "
+            f"(wrap the effect: 'layers': [<background>, <this effect>])")
+
+
 def _render_recipe(recipe: dict) -> tuple[int, int, list[list[str]]]:
     """Expand a recipe to (slot, speed_ms, frames). Caps at MAX_FRAMES with a
     generation-time warning that names the overflow (advisor: warn early, ③)."""
@@ -397,6 +414,7 @@ def _render_recipe(recipe: dict) -> tuple[int, int, list[list[str]]]:
     frames: list[list[str]] = []
     for seg in segments:
         frames.extend(_render_segment(seg))
+    _assert_opaque(frames)
     if len(frames) > MAX_FRAMES:
         _warn(f"recipe expands to {len(frames)} frames > {MAX_FRAMES}/slot "
               f"— truncating to {MAX_FRAMES} (firmware playback cap, 90 续5)")
