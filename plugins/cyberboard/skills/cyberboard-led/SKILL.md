@@ -81,7 +81,7 @@ as something *they* can run at their own terminal if they want to watch it live:
 `cyberboard led play -i preview.gif` (Ctrl-C to stop). Don't wire it into the
 skill's own render loop.
 
-## To judge motion yourself, use `montage` (a GIF Reads as one still frame)
+## To judge motion yourself, use `montage` (a GIF reads as one still frame)
 
 When **you** need to *evaluate* an animation (the おまかせ vision loop, 3b), a GIF
 is useless: the Read tool shows only its **first frame**. Render a **montage** —
