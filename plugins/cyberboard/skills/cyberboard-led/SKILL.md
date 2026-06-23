@@ -2,9 +2,9 @@
 name: cyberboard-led
 description: >-
   Interactively author a Custom LED *display* animation for the AngryMiao
-  CyberBoard R4 and write it to the board. Pick a slot and an effect, tune it
+  CyberBoard R4 and write it to the board. Choose an effect, tune it
   through a Japanese AskUserQuestion dialogue, preview the result as a GIF,
-  iterate, then write it on explicit confirmation. Use whenever the user wants
+  iterate, then pick a slot and write it on explicit confirmation. Use whenever the user wants
   to "make / change the LED animation", "set the keyboard's screen", "put
   text / a pattern / a GIF on the CyberBoard display", or similar. Orchestrates
   the `cyberboard` CLI (`anim` / `led` / `write`). Converses in Japanese; every
@@ -97,16 +97,18 @@ user** (they can open it animated, or run `led play` themselves).
 
 ## Steps
 
-### 1. Choose slot + what to make (AskUserQuestion)
+### 1. Choose what to make (AskUserQuestion)
 
-Ask, in Japanese, two things (one question each, or combined):
+Ask, in Japanese:
 
-- **どのスロット?** 1 / 2 / 3(= Custom LED 1–3 / page 5–7)。
 - **何を作る?**
   - **テキスト横スクロール** — 文字を流す(`text_scroll`)
   - **模様マーキー** — 虹サイクル / ストライプ / グラデ流し(`hue_cycle` / `stripes` / `gradient_scroll`)
   - **キャラ / 絵を縦に流す** — スプライト画像を 40px 幅で縦スクロール(`sprite`)
   - **GIF を取り込む** — 手持ちの GIF を 40×5 に取り込む(`led gif2ir`)
+
+  **どのスロット(1/2/3)に書き込むかは後で聞きます(手順 4a)。** アニメーションの設計は
+  スロット非依存なので、まず「何を作るか」を決めましょう。
 
   **効果ファミリーは意図から先に決める** — 文字なら `text_scroll`、模様なら
   marquee 系、絵 / キャラなら `sprite`。ユーザーが細かいパラメータでなく
@@ -153,8 +155,9 @@ cyberboard anim preview -r recipe.json -o preview.gif --scale 16
 `SendUserFile preview.gif` と一緒に「OK / 調整しますか?」と聞く。調整なら
 recipe を直して再プレビュー。**GIF 取込は base が必須**(`gif2ir` の `-b base.json`)
 なので、この段階ではまず手元の元 GIF をそのまま見せて確認し、40×5 へ変換した
-正確な preview は **手順 4 で base を入手した後**に `led gif2ir` の出力 IR を
+正確な preview は **手順 4 で base とスロットを確定した後**に `led gif2ir` の出力 IR を
 `cyberboard led ir2gif -i config.json --slot N -o preview.gif` で GIF 化して見せる。
+(`gif2ir` には `-b base.json` と `--slot N` の両方が必要。)
 
 ### 3b. おまかせデザイン(vision ループ)
 
@@ -178,13 +181,26 @@ showing the user. (A GIF reads as one still frame — judge with `montage`, abov
      (not mush)? Is the loop blank→blank (`gap >= 5`), not edge→edge? Did 256-frame
      truncation cut the art's bottom (if so, raise `step`)?
 4. Converge in **2–3 rounds**. Then **`SendUserFile` the GIF + the montage** and
-   ask 「これで書き込みますか?」 → on a clear yes, continue to **step 4 (Prepare a
-   complete base IR)** onward.
+   ask 「これで書き込みますか?」 → on a clear yes, continue to **step 4 (Choose the
+   slot + prepare a complete base IR)** onward.
 
 > If every round self-rates "OK", the criteria aren't doing their job. They are
 > meant to *fail* — that's how the loop improves instead of rubber-stamping.
 
-### 4. Prepare a complete base IR (mandatory)
+### 4. Choose the slot + prepare a complete base IR
+
+#### 4a. Choose the slot (AskUserQuestion)
+
+**どのスロットに書き込みますか?** と聞く(初めてスロットを聞く場所はここ)。
+
+- **スロット 1** — Custom LED 1 (page 5)
+- **スロット 2** — Custom LED 2 (page 6)
+- **スロット 3** — Custom LED 3 (page 7)
+
+> `anim preview` / `anim montage` はスロット不要なので手順 1–3 では尋ねなかった。
+> `anim render` の `--slot N` と `led gif2ir` の `--slot N` で使う。
+
+#### 4b. Prepare a complete base IR (mandatory)
 
 A write needs a **full** config to merge into. The user supplies this:
 
@@ -206,6 +222,9 @@ If the user has no base config at all, stop and explain they must export one
 first (there is no way to reconstruct the LED layer from the device).
 
 ### 5. Render into the base → verify → confirm → write
+
+`N` は手順 4a で確定したスロット番号。`--slot N` はレシピ内の `"slot"` フィールドを
+上書きするので、recipe に `"slot"` が書かれていなくても問題ない。
 
 ```sh
 cyberboard anim render -r recipe.json -b base.json -o config.json --slot N --gif preview.gif
@@ -232,7 +251,8 @@ display, since it can't be read back. Optionally suggest they run
 
 ## Effect catalog (recipe JSON)
 
-A recipe is a JSON object. Top-level keys: `slot` (1/2/3), `speed_ms`
+A recipe is a JSON object. Top-level keys: `slot` (1/2/3, **optional** — default 1;
+can be overridden at render time with `--slot N` so the recipe need not contain it), `speed_ms`
 (default 100), and **either**:
 
 - a single effect — an **`"effect"`** key naming it, with that effect's
@@ -317,6 +337,10 @@ image** (animated GIF → first frame). See **2b** for how to get the art.
 > never shows); raise `step` to fit.
 
 ## Recipe examples (small, inline)
+
+> **`"slot"` is optional in recipes** — it defaults to 1 and is overridden by `--slot N` at
+> render time. The examples below include it for clarity, but you can omit it and pass `--slot`
+> on the command line instead.
 
 Seamless scrolling text (slot 1) — single effect, params flat:
 
