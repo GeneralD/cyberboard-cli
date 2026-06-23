@@ -4,6 +4,47 @@
 
 ---
 
+## 2026-06-23 (続25) — #6 前半: キャラ縦スクロール(sprite)エフェクトを cb_anim に追加
+
+issue #6 の 3 原型最後(スプライト系)の**手続き部分のみ**先行実装(agent の vision ループは別 PR)。
+advisor 助言で「分割=sprite エフェクトは単体で価値あり/テスト可」を採用。`tools/cb_anim.py` に
+`_load_sprite` + `_effect_sprite` を追加し EFFECTS 登録。例 `examples/led/sprite-scroll.json` +
+自作 `examples/led/sprite.png`(40×48 シェブロン)。
+
+### 設計(`_effect_sprite`)
+
++ 縦長スプライトを**幅 40px に合わせ高さは比例維持**(縦=スクロール軸ゆえ潰さない)→ N×40 hex グリッド。
+  5px の窓を `total = N + gap` 行に対し巡回スライド。`off=(sign*i*step)%total`、窓行 `wy` が
+  `src<N` なら絵・それ以外は `bg`。アニメ GIF は先頭フレーム。**PIL は遅延 import**(cb_led に倣う)。
++ ノブ: `sprite`(必須)/ `step` / `gap` / `direction`(`up`=内容が上昇=`off` 増加 / `down`)/
+  `bg` / `resample`(nearest/box/lanczos)。既存エフェクトと同じ `seg->list[list[str]]` 契約。
++ **継ぎ目の意味が text_scroll と逆**(advisor 指摘): 任意の絵では `gap:0` 巻き戻り=上端↔下端の
+  直結=**段差**。**綺麗なループは `gap>=5`**(完全に画面外→空白→再入の空白↔空白接合)。docstring/
+  README に明記(text_scroll の「gap:0=継ぎ目なし」を**継承しない**)。
++ **256 cap の sprite 特化警告**(advisor 指摘): 縦長×step 小で容易に超過 → 中央 cap で切られると
+  **絵の下端が出なくなる**。effect 内で「raise step」と具体ヒント。中央 `_render_recipe` の truncate も従来通り。
++ ガード: sprite 欠落 / 高さ<5(幅合わせ後)/ 非画像(`OSError`→clean SystemExit)/ 不正 direction・resample。
+
+### 検証 🟢(advisor 必須=目視)
+
++ **空間正しさを montage 目視で確定**(手続き系の「render すれば自明」が効かない唯一の効果)。
+  40×12 テスト sprite(緑グラデ + row2 に赤マーカー線)を step=1 で縦スクロール → フレームを縦に
+  タイルした 1 枚 montage を Read:
+  + `up`: 赤線が **1px/frame で上昇**(y2→y1→y0)→ 上端から退出 → 上端(明緑)が**下端に再入**(gap0=ジャンプ)。✓
+  + `down`: 赤線が **1px/frame で下降**(y2→y3→y4)= up の鏡像。✓
+  + `gap=4`: gap 行が **bg 黒帯**として描画(gap 機構動作)。✓
++ end-to-end: `anim preview`=56f(48+gap8)/ `anim render -b <local base>` で slot1 page5 へ 56f 焼き
+  (keyframes は base 維持)/ `cb_verify` schema pass / 非画像で clean error / **find-debug クリーン**。
++ 例 GIF 先頭フレーム = シェブロンの腕が両端から内側へ(下向き "v")を Read 確認。
+
+### 次(#6 後半・別 PR)
+
++ **LED デザイン vision ループ agent**(prompt→sprite 生成→`anim render`/`ir2gif`→vision で目視批評→改訂)。
+  sprite ソース(画像 or AI 生成)・ループ形・生成境界に設計フォークあり → ユーザー判断を仰ぐ余地。
+  この agent PR で plugin skill(`cyberboard-led`)の効果カタログに sprite を追加する(生成フロー込み)。
+
+---
+
 ## 2026-06-23 (続24) — 製品化 #2: 対話的 LED 作成スキル(plugin 側、CLI コアを叩く)
 
 issue #2。`plugins/cyberboard/skills/cyberboard-led/SKILL.md`。AskUserQuestion で slot と
