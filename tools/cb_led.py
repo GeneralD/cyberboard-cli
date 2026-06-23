@@ -76,6 +76,19 @@ def frames_to_page(base: dict, slot: int, frames: list[list[str]],
     """
     page_index = _slot_to_page(slot)
     page = _page(base, page_index)
+    # Guard: TRANSPARENT sentinel ("none") must never reach the codec — it means
+    # a layers compositor was not used to resolve alpha (or a single-effect used
+    # bg="transparent" outside a layers context).
+    trans = next(
+        (f"frame {i}, px {j}" for i, f in enumerate(frames) for j, px in enumerate(f)
+         if px == "none"),
+        None,
+    )
+    if trans is not None:
+        raise SystemExit(
+            f"cb_led: unresolved transparent pixel at {trans} — "
+            f"bg='transparent' requires a 'layers' compositor (use 'layers': [...] in your recipe)"
+        )
     bad = next((i for i, f in enumerate(frames) if len(f) != PIXELS), None)
     if bad is not None:
         raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
