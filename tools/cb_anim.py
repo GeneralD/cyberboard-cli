@@ -7,7 +7,7 @@
 
     cb_anim.py render  -r recipe.json -b base.json -o config.json [--gif art.gif]
     cb_anim.py preview -r recipe.json -o art.gif [--scale 16]
-    cb_anim.py montage -r recipe.json -o sheet.png [--max 24 | --no-seam]
+    cb_anim.py montage -r recipe.json -o sheet.png [--scale 8] [--max 24 | --no-seam]
 
 A *recipe* is a small declarative JSON document. A deterministic renderer expands
 it to 40x5xN frames — the AI/author only picks knobs, no raw code runs (whitelisted
@@ -425,8 +425,12 @@ def montage(args: argparse.Namespace) -> int:
     info = cb_led.frames_to_montage(frames, args.output, args.scale,
                                     args.max, not args.no_seam)
     shown, total = info["shown"], info["total"]
-    note = (f"all {total}" if len(shown) == total
-            else f"{len(shown)} of {total} (even-sampled, incl. first+last)")
+    if len(shown) == total:
+        note = f"all {total}"
+    elif len(shown) == 1:
+        note = f"1 of {total} (frame {shown[0]})"
+    else:
+        note = f"{len(shown)} of {total} (even-sampled, incl. first+last)"
     seam = " + wrap-seam pair [last,first]" if info["seam"] else ""
     print(f"cb_anim: montage {note} frames{seam} @ "
           f"{W * args.scale}x{H * args.scale}/frame -> {args.output}")

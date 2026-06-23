@@ -140,9 +140,13 @@ def frames_to_montage(frames: list[list[str]], output: str, scale: int = 8,
         raise SystemExit(f"cb_led: frame {bad} has {len(frames[bad])} px, expected {PIXELS}")
 
     n = len(frames)
-    max_rows = max(2, max_rows)
-    shown = (list(range(n)) if n <= max_rows
-             else sorted({round(i * (n - 1) / (max_rows - 1)) for i in range(max_rows)}))
+    max_rows = max(1, max_rows)
+    if n <= max_rows:
+        shown = list(range(n))
+    elif max_rows == 1:
+        shown = [0]  # a one-row montage: just the first frame (avoids /0 below)
+    else:
+        shown = sorted({round(i * (n - 1) / (max_rows - 1)) for i in range(max_rows)})
 
     sw, sh, sep = W * scale, H * scale, 2
     white, band = (255, 255, 255), (255, 120, 0)  # band marks the wrap-seam section
@@ -152,22 +156,22 @@ def frames_to_montage(frames: list[list[str]], output: str, scale: int = 8,
         img.putdata([_hex_px(s) for s in frames[idx]])
         return img.resize((sw, sh), Image.Resampling.NEAREST)
 
-    parts: list[tuple[str, object, int]] = []  # (kind, strip-index | fill-color, height)
+    # each part is (content, height): content is a frame-strip Image or an RGB fill
+    parts: list[tuple[Image.Image | tuple[int, int, int], int]] = []
     for idx in shown:
-        parts += [("strip", idx, sh), ("gap", white, sep)]
+        parts += [(strip(idx), sh), (white, sep)]
     parts.pop()  # no trailing gap
     show_seam = seam and n > 1
-    if show_seam:
-        parts += [("gap", white, sep), ("gap", band, sep * 4),
-                  ("strip", n - 1, sh), ("gap", white, sep), ("strip", 0, sh)]
+    if show_seam:  # colored band, then the wrap pair [last, first] adjacent
+        parts += [(white, sep), (band, sep * 4), (strip(n - 1), sh), (white, sep), (strip(0), sh)]
 
-    canvas = Image.new("RGB", (sw, sum(h for _, _, h in parts)), white)
+    canvas = Image.new("RGB", (sw, sum(h for _, h in parts)), white)
     y = 0
-    for kind, val, h in parts:
-        if kind == "strip":
-            canvas.paste(strip(val), (0, y))  # type: ignore[arg-type]
-        elif val != white:
-            canvas.paste(Image.new("RGB", (sw, h), val), (0, y))  # type: ignore[arg-type]
+    for content, h in parts:
+        if isinstance(content, Image.Image):
+            canvas.paste(content, (0, y))
+        elif content != white:  # a non-background fill band
+            canvas.paste(Image.new("RGB", (sw, h), content), (0, y))
         y += h
     canvas.save(output)
     return {"total": n, "shown": shown, "seam": show_seam}
