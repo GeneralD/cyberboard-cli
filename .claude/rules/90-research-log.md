@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-06-23 (続24) — 製品化 #2: 対話的 LED 作成スキル(plugin 側、CLI コアを叩く)
+
+issue #2。`plugins/cyberboard/skills/cyberboard-led/SKILL.md`。AskUserQuestion で slot と
+効果を選ばせ、preview を見せて反復、明示確認して実機書込まで。**fork しない**(対話フロー)。
+**CLI がコア**の方針通り、スキルは `cyberboard anim/led/write` を**オーケストレーションするだけ**。
+
+### advisor の効いた3指摘(設計の芯)
+
++ **preview ループは GIF ベース**: `cyberboard led play`(続22)は**非 TTY で 1 フレーム静止**
+  → agent の Bash では preview にならない。エージェント側は `anim preview -o preview.gif` →
+  `SendUserFile` で見せる。`led play` は**ユーザーが自分の端末で**動かす用、とスキルに明記。
++ **base IR の出所(end-user 文脈)**: repo dev は `outputs/merged_*.json` を base にできたが
+  あれは gitignore のローカル専有物。**プラグイン利用者は持たない** → スキルは「AM Master /
+  公式 web UI から export した完全 config を base に」と誘導。理由(JSON_START 全消去 + LED
+  read-back 不可ゆえ base が現状 LED を保持していないと消える)を明示。`read keymap` は keymap 半分のみ。
++ **自己完結**: プラグインは `~/.claude/plugins/cache/` にコピーされ **repo の tools/ examples/
+  rules/ を参照できない** → 効果カタログ(text_scroll/solid/hue_cycle/stripes/gradient_scroll)と
+  小さなレシピ例を**スキル内に inline**(`examples/led/` を指さない)。400 行制限内(~275 行)。
+
+### 検証 🟢
+
++ **レシピ形式の罠を実測で是正**: 当初 inline 例を `{"text_scroll":{…}}`(ネスト)で書いて
+  `unknown effect None` で失敗 → 実形式は**フラット + `"effect"` 判別キー**
+  (`{"effect":"text_scroll","text":…}` / sequence は各セグメントに `effect`)。3 例とも
+  `anim preview` で render 成功(text 80f / sequence 136f / hue 90f)= **inline カタログが
+  authorable であることを確認**(利用者の唯一の参照ゆえ正確性が要)。
++ frontmatter は `cyberboard-device` に倣う(name / description / allowed-tools: AskUserQuestion /
+  SendUserFile / Read / Write / Bash)。スキルは英語記述 + **日本語対話**を明記。
+
+### 次
+
++ #6 sprite 縦スクロール + LED デザイン vision ループ(生成→render→vision 批評→改訂)。#1 epic。
+
 ## 2026-06-23 (続23) — 製品化 #3: Claude Code プラグイン scaffold(PR #13 merged)
 
 issue #3。CLI を Claude Code プラグインとして配布する scaffold(MCP のみ)。`90` 続21 の
