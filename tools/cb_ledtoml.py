@@ -87,9 +87,17 @@ def _source_frames(src: dict, outer_slot: int, resample: str,
         frames, gif_ms = cb_led._gif_frames(path, resample)
         return f"gif:{path.name}", frames, gif_ms
     if kind == "config":
+        src_slot = src.get("slot", outer_slot)
+        if src_slot not in (1, 2, 3):
+            raise SystemExit(f"cb_ledtoml: config source slot must be 1, 2 or 3 "
+                             f"(got {src_slot!r})")
         cfg = json.loads(path.read_text())
-        src_slot = int(src.get("slot", outer_slot))
-        page = cb_led._page(cfg, cb_led._slot_to_page(src_slot))
+        page_index = cb_led._slot_to_page(src_slot)  # validated above -> won't raise
+        page = next((p for p in cfg.get("page_data", [])
+                     if p.get("page_index") == page_index), None)
+        if page is None:
+            raise SystemExit(f"cb_ledtoml: config {path.name} has no slot {src_slot} "
+                             f"(page_index {page_index})")
         fd = page.get("frames", {}).get("frame_data", [])
         if not fd:
             raise SystemExit(f"cb_ledtoml: config {path.name} slot {src_slot} "
@@ -113,9 +121,10 @@ def _cap_plan(counts: list[int]) -> tuple[list[int], int]:
 
 def _compose_slot(slot: dict, base: dict, base_dir: Path) -> tuple[int, dict]:
     """Compose one [[slot]] into the base; returns (slot_index, patched page)."""
-    if "index" not in slot:
-        raise SystemExit("cb_ledtoml: each [[slot]] needs an index (1/2/3)")
-    index = int(slot["index"])
+    index = slot.get("index")
+    if index not in (1, 2, 3):  # catches both missing (None) and out-of-range
+        raise SystemExit(f"cb_ledtoml: each [[slot]] needs an index of 1, 2 or 3 "
+                         f"(got {index!r})")
     resample = slot.get("resample", "nearest")
     if resample not in RESAMPLE:
         raise SystemExit(f"cb_ledtoml: slot {index} resample must be one of {RESAMPLE} "

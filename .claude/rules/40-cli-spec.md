@@ -225,7 +225,7 @@ cb_anim.py montage -r recipe.json -o sheet.png [--scale 8] [--max 24] [--no-seam
 GIF 単体を超えて「複数ソースを slot ごとに合成」する toml マニフェスト。`90` 続28、issue #19。
 
 ```text
-cb_ledtoml.py compose -m led.toml [-b base.json] -o config.json   # マニフェスト → 完全 IR
+cyberboard compose -m led.toml [-b base.json] -o config.json   # マニフェスト → 完全 IR
 ```
 
 ```toml
