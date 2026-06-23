@@ -57,6 +57,18 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "set-time": ("cb_settime", [], "set the device RTC clock"),
 }
 
+# Meta commands handled by the dispatcher itself (not a cb_* tool).
+_COMPLETION_HELP = "print a shell completion script (bash/zsh/fish)"
+
+# Second-level actions for the multi-action commands (mirror each tool's own
+# subparsers). Used only to enrich shell completion — never for dispatch.
+SUBCOMMANDS: dict[str, list[str]] = {
+    "device": ["info"],
+    "led": ["gif2ir", "ir2gif", "play", "recipe"],
+    "anim": ["render", "preview", "montage"],
+    "completion": ["bash", "zsh", "fish"],
+}
+
 
 def _optional_dep_hint(cmd: str, exc: ModuleNotFoundError) -> int | None:
     """Clean message + exit code for a missing optional dep, else None.
@@ -91,7 +103,7 @@ def _version() -> str:
 
 
 def _usage() -> str:
-    width = max(len(name) for name in COMMANDS)
+    width = max(len(name) for name in (*COMMANDS, "completion"))
     lines = [
         "cyberboard — configure the AngryMiao CyberBoard R4 without AM Master",
         "",
@@ -102,10 +114,25 @@ def _usage() -> str:
     for name, (_, _, help_text) in COMMANDS.items():
         lines.append(f"  {name.ljust(width)}  {help_text}")
     lines += [
+        f"  {'completion'.ljust(width)}  {_COMPLETION_HELP}",
         "",
         "run 'cyberboard <command> --help' for command-specific options",
     ]
     return "\n".join(lines)
+
+
+def _completion(rest: list[str]) -> int:
+    """Handle `cyberboard completion <shell>` — print the script to stdout."""
+    from cyberboard import completion
+
+    if len(rest) != 1 or rest[0] not in completion.SHELLS:
+        print(f"usage: cyberboard completion {{{','.join(completion.SHELLS)}}}",
+              file=sys.stderr)
+        return 2
+    commands = [(name, help_text) for name, (_, _, help_text) in COMMANDS.items()]
+    commands.append(("completion", _COMPLETION_HELP))
+    print(completion.script(rest[0], commands, SUBCOMMANDS))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -118,6 +145,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     cmd, rest = argv[0], argv[1:]
+    if cmd == "completion":
+        return _completion(rest)
+
     entry = COMMANDS.get(cmd)
     if entry is None:
         print(f"cyberboard: unknown command {cmd!r}\n", file=sys.stderr)
