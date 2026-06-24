@@ -175,21 +175,34 @@ def render(layer: list[str] | None = None, corners: str = "round") -> str:
     return "\n".join(out)
 
 
+_MATRIX_SIZE = 8 * COLS  # 25 cols x 8 rows = 200 keycodes per layer
+
+
 def _load_layer(path: str, layer_n: int) -> list[str]:
-    """Load layer `layer_n` (1-indexed) from an IR/official config or dump."""
+    """Load + validate layer `layer_n` (1-indexed) from an IR/official config
+    or `cb_read --json` dump. Rejects malformed shapes early so bad data can't
+    reach decode()/_fit() and crash later."""
     try:
         with open(path) as f:
             config = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
-        raise SystemExit(f"cb_keymap: cannot read {path}: {e}")
+        raise SystemExit(f"cb_keymap: cannot read {path}: {e}") from None
     try:
         layers = [ly["layer"] for ly in config["key_layer"]["layer_data"]]
     except (KeyError, TypeError):
-        raise SystemExit(f"cb_keymap: {path} has no key_layer.layer_data")
+        raise SystemExit(f"cb_keymap: {path} has no key_layer.layer_data") from None
     if not 1 <= layer_n <= len(layers):
         raise SystemExit(
             f"cb_keymap: --layer {layer_n} out of range (1..{len(layers)})")
-    return layers[layer_n - 1]
+    layer = layers[layer_n - 1]
+    if not isinstance(layer, list):
+        raise SystemExit(f"cb_keymap: layer {layer_n} is not a list")
+    if len(layer) != _MATRIX_SIZE:
+        raise SystemExit(f"cb_keymap: layer {layer_n} has {len(layer)} keys; "
+                         f"expected {_MATRIX_SIZE}")
+    if any(not isinstance(v, str) for v in layer):
+        raise SystemExit(f"cb_keymap: layer {layer_n} has non-string keycodes")
+    return layer
 
 
 def main() -> int:
