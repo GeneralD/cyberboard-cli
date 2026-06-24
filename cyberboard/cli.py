@@ -53,7 +53,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "anim": ("cb_anim", [], "render declarative LED animations (render / preview / montage)"),
     "compose": ("cb_ledtoml", [], "compose a led.toml manifest (multi-source slots) -> IR"),
     "read": ("cb_read", [], "read config back from the device (keymap)"),
-    "keymap": ("cb_keymap", [], "render the keymap as a keyboard-shaped ASCII grid (show)"),
+    "keymap": ("cb_keymap", [], "keyboard-shaped keymap grid: show, or edit (TUI, click to reassign)"),
     "write": ("cb_write", [], "write an IR config to the device"),
     "set-time": ("cb_settime", [], "set the device RTC clock"),
 }
@@ -65,7 +65,7 @@ _COMPLETION_HELP = "print a shell completion script (bash/zsh/fish)"
 # subparsers). Used only to enrich shell completion — never for dispatch.
 SUBCOMMANDS: dict[str, list[str]] = {
     "device": ["info"],
-    "keymap": ["show"],
+    "keymap": ["show", "edit"],
     "led": ["gif2ir", "ir2gif", "play", "recipe"],
     "anim": ["render", "preview", "montage"],
     "completion": ["bash", "zsh", "fish"],

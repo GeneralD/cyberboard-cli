@@ -175,6 +175,36 @@ def render(layer: list[str] | None = None, corners: str = "round") -> str:
     return "\n".join(out)
 
 
+def _main_width() -> int:
+    """Width the main blocks are padded to (= the widest row's top line)."""
+    return max(sum(inner for _, inner, _ in row) + len(row) + 1
+               for row in _MAIN_ROWS)
+
+
+def cell_geometry() -> list[tuple[int, int, int, int, int]]:
+    """Layout of every key box as `(matrix_index, top_line, bottom_line,
+    col_left, col_right)` in the same line/column coordinates `render()` emits
+    (borders included, all inclusive). Layer-independent — widths are fixed by
+    the template — so the TUI builds the click hit-map once and maps a click
+    `(x=col, y=line)` back to a matrix index. Verified against `render()` output
+    in the tests, so it can't silently drift from what is drawn."""
+    cells: list[tuple[int, int, int, int, int]] = []
+    for r, row in enumerate(_MAIN_ROWS):  # main blocks, left of the gutter
+        top, col = 3 * r, 0
+        for mcol, inner, _default in row:
+            cells.append((r * COLS + mcol, top, top + 2, col, col + inner + 1))
+            col += inner + 1
+    base = _main_width() + GUTTER  # right cluster starts here on every row
+    cells += [(r * COLS + _NAV_COL, 3 * r, 3 * r + 2, base, base + _NAV_INNER + 1)
+              for r in _NAV]
+    up_left = base + _ARROW_INDENT  # row 4: Up, indented above Down
+    cells.append((4 * COLS + _UP_COL, 12, 14, up_left, up_left + _ARROW_INNER + 1))
+    cells += [(5 * COLS + mcol, 15, 17,
+               base + j * (_ARROW_INNER + 1), base + j * (_ARROW_INNER + 1) + _ARROW_INNER + 1)
+              for j, mcol in enumerate(_ARROW_COLS)]
+    return cells
+
+
 _MATRIX_SIZE = 8 * COLS  # 25 cols x 8 rows = 200 keycodes per layer
 
 
@@ -219,7 +249,22 @@ def main() -> int:
                       help="layer to show, 1-indexed (default: 1)")
     show.add_argument("--corners", choices=("round", "square"), default="round",
                       help="key-box corner style (default: round)")
+
+    edit = sub.add_parser(
+        "edit", help="interactively edit the keymap by clicking keys (TUI; needs the 'tui' extra)")
+    edit.add_argument("config",
+                      help="IR/official config JSON to edit (a complete config)")
+    edit.add_argument("--layer", type=int, default=1,
+                      help="layer to start on, 1-indexed (default: 1)")
+    edit.add_argument("--corners", choices=("round", "square"), default="round",
+                      help="key-box corner style (default: round)")
+    edit.add_argument("-o", "--output",
+                      help="where to save edits (default: overwrite the input config)")
     args = ap.parse_args()
+
+    if args.action == "edit":
+        import cb_keymap_tui  # lazy: only the editor needs the textual extra
+        return cb_keymap_tui.run(args.config, args.layer, args.corners, args.output)
 
     layer = _load_layer(args.config, args.layer) if args.config else None
     if args.config:

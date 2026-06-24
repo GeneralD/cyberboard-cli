@@ -44,6 +44,7 @@ setup stays lean. Add them in brackets, e.g. `'cyberboard-cli[led,verify]'`:
 |---|---|---|
 | *(core)* | `pyserial` | device I/O + keymap build — `devices` / `read` / `write` / `doctor` / `build` |
 | `[led]` | `pillow` | LED authoring — `led` / `anim` / `compose` |
+| `[tui]` | `textual` | the interactive keymap editor — `keymap edit` |
 | `[verify]` | `jsonschema` | strict schema checks in `verify` (degrades to basic checks without it) |
 | `[mcp]` | `mcp` | the `cyberboard-mcp` server — see [MCP server](#mcp-server) |
 | `[all]` | all of the above | everything |
@@ -93,7 +94,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `anim` | Render declarative LED animations (`render` / `preview` / `montage`) |
 | `compose` | Compose a `led.toml` manifest (multi-source slots) → IR |
 | `read` | Read config back from the device (`keymap`) |
-| `keymap` | Render the keymap as a keyboard-shaped ASCII grid (`show`) |
+| `keymap` | Keyboard-shaped keymap grid — `show` (ASCII), or `edit` (interactive TUI, click a key to reassign; needs `[tui]`) |
 | `write` | Write an IR config to the device |
 | `set-time` | Set the device RTC clock |
 | `completion` | Print a shell completion script (`bash` / `zsh` / `fish`) |
@@ -105,6 +106,7 @@ cyberboard led play -i preview.gif                              # play it right 
 cyberboard compose -m examples/led/compose.toml -b base.json -o config.json   # combine many sources per slot
 cyberboard build -k keymap.toml -b base.json -o config.json     # build a config from a TOML keymap
 cyberboard keymap show config.json --layer 1                    # view the keymap as a keyboard grid
+cyberboard keymap edit config.json                              # edit it interactively — click a key to reassign (needs [tui])
 cyberboard write config.json --execute                          # write it (omit --execute for a dry run)
 ```
 
