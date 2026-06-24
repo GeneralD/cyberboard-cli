@@ -107,6 +107,7 @@ _ARROW_INNER = 3
 _UP_COL = 13          # shift row, idx 113
 _ARROW_COLS = [12, 13, 14]  # bottom row Lft/Dwn/Rgt, idx 137/138/139
 _ARROW_DEFAULTS = ["←", "↓", "→"]
+_UP_DEFAULT = "↑"     # shift-row Up; shared so render() + the color skeleton can't drift
 
 _MAIN_ROWS = [_ROW0, _ROW1, _ROW2, _ROW3, _ROW4, _ROW5]
 
@@ -166,7 +167,7 @@ def render(layer: list[str] | None = None, corners: str = "round") -> str:
             label = _label_at(layer, r * COLS + _NAV_COL, _NAV[r])
             right = _box([(label, _NAV_INNER)], glyphs)
         elif r == 4:   # shift row: Up, indented to sit above Down
-            label = _label_at(layer, r * COLS + _UP_COL, "↑")
+            label = _label_at(layer, r * COLS + _UP_COL, _UP_DEFAULT)
             right = [" " * _ARROW_INDENT + ln
                      for ln in _box([(label, _ARROW_INNER)], glyphs)]
         else:          # bottom row: Lft / Dwn / Rgt

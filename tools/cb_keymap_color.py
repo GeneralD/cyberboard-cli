@@ -86,9 +86,10 @@ def _skeleton_defaults() -> dict[int, str]:
            for col, _inner, d in row}
     out.update({r * cb_keymap.COLS + cb_keymap._NAV_COL: d
                 for r, d in cb_keymap._NAV.items()})
-    out[4 * cb_keymap.COLS + cb_keymap._UP_COL] = "↑"
+    out[4 * cb_keymap.COLS + cb_keymap._UP_COL] = cb_keymap._UP_DEFAULT
     out.update({5 * cb_keymap.COLS + col: d
-                for col, d in zip(cb_keymap._ARROW_COLS, cb_keymap._ARROW_DEFAULTS)})
+                for col, d in zip(cb_keymap._ARROW_COLS, cb_keymap._ARROW_DEFAULTS,
+                                  strict=True)})
     return out
 
 
