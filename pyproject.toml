@@ -34,8 +34,10 @@ led = ["pillow>=10.0"]
 verify = ["jsonschema>=4.0"]
 # MCP server (cyberboard-mcp) exposing the CLI's operations as MCP tools.
 mcp = ["mcp>=1.2"]
+# Interactive keymap editor TUI (cyberboard keymap edit).
+tui = ["textual>=2.0"]
 # Everything.
-all = ["pillow>=10.0", "jsonschema>=4.0", "mcp>=1.2"]
+all = ["pillow>=10.0", "jsonschema>=4.0", "mcp>=1.2", "textual>=2.0"]
 
 [project.scripts]
 cyberboard = "cyberboard.cli:main"

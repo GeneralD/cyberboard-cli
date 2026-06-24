@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-06-24 (続32) — `keymap edit`: クリックでキー再割当する対話的 TUI(Textual, issue #37)
+
+ユーザー「インタラクティブな tui にしよう。クリックでキー割り当て変えられるところまで行こう」。#37 の MVP
+(クリック→再割当)を **Textual** で実装(framework は AskUserQuestion でユーザー選択)。続31 の `keymap show`
+レンダラの上に乗せる**ハイブリッド設計**: グリッドは再描画せず `cb_keymap.render()` を再利用し、座標→matrix
+index の hit-test だけ足す。
+
+### 設計(描画を二重持ちしない = ずれない)
+
++ **`cb_keymap.cell_geometry()` を新設**(render() は不変): 各キー box を `(matrix_index, top_line,
+  bottom_line, col_left, col_right)` で返す。`_main_width()` で本体幅を出し、右ナビ列・逆 T 字矢印の
+  固定オフセットも render() と同じ式で算出。**render() と突合して検証**(82 cell / bad 0)= グリッドと
+  クリック判定が構造的にずれない。
++ **`tools/cb_keymap_tui.py`**(新規): `_GEOMETRY` から `_HIT`(box 矩形内の全 (line,col) → idx)と
+  `_SPAN`(idx → ラベル span)を一度だけ構築(幅はテンプレ固定でレイヤ非依存)。`_styled()` が
+  `render()` 出力を Rich Text 化し変更キーを `bold black on yellow` でハイライト。`Keyboard(Static)` の
+  `on_click` が `event.offset` で `_HIT` 引き → `edit_index`。`KeyEditScreen(ModalScreen[str])` で
+  新値入力 → `keycode.name_to_code`(可読名 or 生 `#…`)、不正名は `notify(severity=error)` で却下。
+  `s`=保存 / `q`=終了 / `←→`=レイヤ。保存は `json.dump(ensure_ascii=False, indent=2)`、`-o` 省略=in-place。
++ **配線**: `cb_keymap.py main()` に `edit` subparser(positional `config` 必須 / `--layer` / `--corners` /
+  `-o`)を追加し lazy `import cb_keymap_tui`。`cli.py` の `keymap` help を「show, or edit」に更新、
+  `SUBCOMMANDS["keymap"]=["show","edit"]`。`pyproject.toml` に extra `tui=["textual>=2.0"]`(+`all`)。
+  `textual` は遅延 import → 未導入で `pip install 'cyberboard-cli[tui]'` の clean SystemExit。
+
+### 検証 🟢(ヘッドレス + スクショ)
+
++ **`App.run_test()` + `pilot.click(selector, offset=)`** で 6 ステップ全 pass: ①renderer が
+  layer を描く(`_styled(...).plain` に Esc/Tab)②キークリック→モーダル出現 ③再割当→layer 更新 +
+  変更マーク ④空クリック(真の余白 col90)= no-op ⑤不正名却下 ⑥保存→再読込で永続。
++ ⚠ テスト intro-spection の罠: `Keyboard` に `.renderable` 属性は無い(version 依存)→ **renderer を
+  直接** `tui._styled(...)` で叩いて検証。populated layer は Space を `Spc` とデコードするので
+  assert は `Esc`/`Tab` に。空クリック座標は (100,1) が nav Home cell 内だった → (90,1) が真の gutter。
++ `app.save_screenshot()`(SVG)→ PNG 化で目視: **Esc→LCt 再割当が黄ハイライト**、ヘッダ/フッタ/
+  7 レイヤ表示。`keymap show` 回帰 OK、find-debug クリーン、dispatcher 配線 OK。
++ uv.lock に textual v8.2.7(+ rich/pygments/uc-micro-py)を反映。
+
+### 次
+
++ #37 の残(別 PR 候補): 修飾キー記号化(⌘⌥⌃⇧)/ カラフル化(現状は変更キーの黄ハイライトのみ)/
+  Nerd Font opt-off / `~/.config/cyberboard-cli/config.toml` 設定土台 / judge-panel 並列(v2)。
++ per-key GIF(web-index↔keyframes-90)/ 実機 end-to-end。
+
+---
+
 ## 2026-06-24 (続31) — `keymap show`: キーボード型 ASCII グリッドレンダラ(issue #38)
 
 ユーザー「ちゃんとグリッドを書いてくれなきゃ」(従来の `decode_keymap.py` のフラット表 `row0 (idx…): esc f1…`
