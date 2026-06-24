@@ -4,6 +4,61 @@
 
 ---
 
+## 2026-06-24 (続33) — keymap グリッドのカテゴリ別カラー + 修飾/矢印キー記号化(issue #37 完了)
+
+ユーザー issue #37「TUIでキー編集機能。カラフルに。変更したキーは着色。cmd, alt, ctrl, shift など名前が
+長いキーは記号も使いながらできるだけコンパクトに」。MVP(続32)でクリック再割当 + 変更キー黄ハイライトは
+済んでいたので、本 PR は残りの**カラフル化 + 記号化**。`cb_keymap.render()` を共有する `keymap show` と
+`keymap edit`(TUI)の両方に効く。
+
+### advisor が止めた罠: color を `_box` に通すと右クラスタが崩れる
+
++ 当初案「`_box` の label を ANSI で包む」は **NG**: render() は `block[i].ljust(main_w)` で右クラスタを
+  継ぐが、ANSI バイトで `len()` が膨らみ `ljust` の空白が**足りなくなって右側(nav/矢印)が着色行だけ
+  左にずれる**(TUI の char-offset 問題と同じクラスが show 側に再発)。
++ **採用した設計 = レイアウトはプレーンのまま、`cell_geometry()` 駆動の後段で着色**(両消費者共通):
+  show は ANSI を、TUI は Rich style を**セル span にオーバレイ**。geometry は render 座標と一致が
+  テスト済み(82 cell / bad 0)なので no-drift を継承。変更キーの黄ハイライトは最後に重ねて優先。
+  検証: `keymap show --color always` の **ANSI 除去後が plain とバイト一致**(レイアウト無影響を実証)。
+
+### 実装(`tools/cb_keymap.py` + `cb_keymap_tui.py`)
+
++ **1 分類器** `category(code)→カテゴリ` を両者で共有。skeleton(layer=None)はコードが無いので
+  `_category_of_label()` でラベルから分類(`_DEFAULTS` = render(None) が描く既定ラベル表)。
++ **カテゴリ→xterm-256 index を ANSI と Rich で共有**(truecolor 不使用 = どちらも同 index で表現):
+  mod=81 cyan / fn=213 pink / nav=114 green / alnum=252 white / punct=247 grey / vendor=**105** blue-violet /
+  blank=dim(着色せず)。
++ **記号化**(`decode()` の HID07 表 + skeleton 既定の両方): modifier = **⌘⌥⌃⇧ + L/R**(2 字、コンパクト)、
+  矢印 = **←→↑↓**(1 字)。⌘⌥⌃⇧←→↑↓ は East-Asian Ambiguous 幅だが、box-drawing と同じく当環境では
+  narrow 扱いで整列(plain 出力で目視確認)。Esc/Tab/Enter/Bsp は短く既に分かるので**語のまま**(過剰記号化しない)。
++ `show --color auto`(既定)= TTY のみ着色・`NO_COLOR` 尊重、`always`/`never` で強制。auto はパイプで plain
+  (`show | head` 回帰維持)。
+
+### palette-artisan レビュー(色は user 明示要求 = 視覚で検証)
+
++ レンダリング PNG + 数値で評価。**最大の問題 = vendor(141 purple)と fn(213 pink)が ΔE2000=14.6 で
+  小ラベルだと混同**。→ **vendor を 141→105(#8787ff blue-violet)に変更**で ΔE 22.3 に改善、調和は維持。
+  punct も 245→247 で輝度弁別を微増(色覚多様性に強い)。nav(green)vs mod(cyan)は ΔE38.8 で許容
+  (P型でやや近いが keymap では同時並列が少ない)→ 現状維持。採用 = vendor 105 / punct 247。
+
+### 検証 🟢
+
++ ヘッドレス TUI テスト(`App.run_test()` + `pilot.click`)**7 ステップ全 pass**(renderer / クリック→
+  モーダル / 再割当+変更マーク / 空クリック no-op / 不正名却下 / revert→untracked / 保存→再読込永続)。
+  ⚠ テストは `$CLAUDE_JOB_DIR/tmp` のコピーを import する(`uv run` がスクリプト dir を sys.path 先頭に
+  する)ので、**編集後はリポの最新 tools を tmp へコピーしてから再実行**しないと stale を検証してしまう
+  (最初それで旧ラベル・色なしのスクショを撮ってしまった)。ALIAS も記号ラベルへ更新。
++ geometry vs render = **82 cell / bad 0**(ラベル変更で幅は不変ゆえ geometry 不変を再確認)。
+  ANSI 除去 == plain / auto パイプ=plain / `--corners square` 回帰 OK / find-debug クリーン。
++ スクショ(変更キー L⌃ 黄ハイライト + F 行 pink + nav green + 英数 white)を PR に添付。
+
+### 次
+
++ #37 は完了(クリック編集 + カラフル + 変更着色 + 記号化)。残バックログ(別案件): Nerd Font opt-off /
+  `~/.config/cyberboard-cli/config.toml` 設定土台 / judge-panel 並列(v2)/ per-key GIF / 実機 end-to-end。
+
+---
+
 ## 2026-06-24 (続32) — `keymap edit`: クリックでキー再割当する対話的 TUI(Textual, issue #37)
 
 ユーザー「インタラクティブな tui にしよう。クリックでキー割り当て変えられるところまで行こう」。#37 の MVP

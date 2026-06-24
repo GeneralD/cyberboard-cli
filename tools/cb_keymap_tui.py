@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import cb_keymap
+import cb_keymap_color
 import keycode
 
 try:
@@ -46,13 +47,23 @@ _SPAN = {idx: (top + 1, cl + 1, cr) for idx, top, bot, cl, cr in _GEOMETRY}
 
 
 def _styled(layer: list[str], corners: str, changed: set[int]) -> Text:
-    """Rendered keyboard as a Rich Text, with changed keys highlighted."""
+    """Rendered keyboard as a Rich Text: category colors + changed-key highlight.
+
+    Colors are applied as a geometry-driven span overlay (same mechanism as
+    cb_keymap's ANSI post-pass) so they never disturb the plain-text layout;
+    the changed-yellow overlay is applied last so it wins on edited cells."""
     lines = cb_keymap.render(layer, corners).split("\n")
     text = Text("\n".join(lines), no_wrap=True)
     starts, pos = [], 0
     for line in lines:
         starts.append(pos)
         pos += len(line) + 1  # + newline
+    cats = cb_keymap_color.categories(layer)
+    for idx, (mid, c0, c1) in _SPAN.items():
+        cat = cats.get(idx)
+        if cat and cat != "blank":
+            text.stylize(f"color({cb_keymap_color.CATEGORY_COLOR[cat]})",
+                         starts[mid] + c0, starts[mid] + c1)
     for idx in changed:
         mid, c0, c1 = _SPAN[idx]
         text.stylize("bold black on yellow", starts[mid] + c0, starts[mid] + c1)

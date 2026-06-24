@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 
 COLS = 25  # matrix columns; physical index = row * COLS + col
 
@@ -32,12 +34,13 @@ HID07.update({
     0x2E: "=", 0x2F: "[", 0x30: "]", 0x31: "\\", 0x33: ";", 0x34: "'", 0x35: "`",
     0x36: ",", 0x37: ".", 0x38: "/", 0x39: "Cap", 0x46: "PrSc", 0x47: "ScLk",
     0x48: "Pause", 0x49: "Ins", 0x4A: "Home", 0x4B: "PgUp", 0x4C: "Del",
-    0x4D: "End", 0x4E: "PgDn", 0x4F: "Rgt", 0x50: "Lft", 0x51: "Dwn", 0x52: "Up",
+    0x4D: "End", 0x4E: "PgDn", 0x4F: "→", 0x50: "←", 0x51: "↓", 0x52: "↑",
     0x53: "NumLk", 0x65: "App",
 })
 HID07.update({0x3A + i: f"F{i + 1}" for i in range(12)})  # F1..F12
-HID07.update({0xE0: "LCt", 0xE1: "LSh", 0xE2: "LAl", 0xE3: "LGu",
-              0xE4: "RCt", 0xE5: "RSh", 0xE6: "RAl", 0xE7: "RGu"})
+# Modifiers shown with macOS keycap symbols (⌃⇧⌥⌘) + side, compact and legible.
+HID07.update({0xE0: "L⌃", 0xE1: "L⇧", 0xE2: "L⌥", 0xE3: "L⌘",
+              0xE4: "R⌃", 0xE5: "R⇧", 0xE6: "R⌥", 0xE7: "R⌘"})
 # page 0x0C (consumer / media)
 HID0C = {0xB5: "Nxt", 0xB6: "Prv", 0xB7: "Stop", 0xCD: "Ply", 0xE2: "Mut",
          0xE9: "Vl+", 0xEA: "Vl-", 0x70: "Br+", 0x6F: "Br-"}
@@ -85,16 +88,16 @@ _ROW2 = ([(0, 8, "Tab")]
          + [(c + 1, 5, lbl) for c, lbl in enumerate(
              ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]"])]
          + [(13, 8, "Bsp")])
-_ROW3 = ([(0, 10, "LCt")]
+_ROW3 = ([(0, 10, "L⌃")]
          + [(c + 1, 5, lbl) for c, lbl in enumerate(
              ["A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "."])]
          + [(13, 12, "Ent")])
-_ROW4 = ([(0, 12, "LSh")]
+_ROW4 = ([(0, 12, "L⇧")]
          + [(c + 1, 5, lbl) for c, lbl in enumerate(
              ["Z", "X", "C", "V", "B", "N", "M", ",", ".", "/"])]
-         + [(11, 16, "RSh")])
-_ROW5 = [(0, 6, "Fn"), (1, 6, "LAlt"), (2, 6, "LGui"),
-         (6, 36, "Space"), (10, 6, "RGui"), (11, 6, "RAlt")]
+         + [(11, 16, "R⇧")])
+_ROW5 = [(0, 6, "Fn"), (1, 6, "L⌥"), (2, 6, "L⌘"),
+         (6, 36, "Space"), (10, 6, "R⌘"), (11, 6, "R⌥")]
 
 # Per-row right cluster: ("nav", col, inner, default) for rows 0-3, the Up key
 # for row 4 (placed above Down), and the L/D/R arrows for row 5.
@@ -103,7 +106,7 @@ _NAV_COL, _NAV_INNER = 14, 12
 _ARROW_INNER = 3
 _UP_COL = 13          # shift row, idx 113
 _ARROW_COLS = [12, 13, 14]  # bottom row Lft/Dwn/Rgt, idx 137/138/139
-_ARROW_DEFAULTS = ["Lft", "Dwn", "Rgt"]
+_ARROW_DEFAULTS = ["←", "↓", "→"]
 
 _MAIN_ROWS = [_ROW0, _ROW1, _ROW2, _ROW3, _ROW4, _ROW5]
 
@@ -163,7 +166,7 @@ def render(layer: list[str] | None = None, corners: str = "round") -> str:
             label = _label_at(layer, r * COLS + _NAV_COL, _NAV[r])
             right = _box([(label, _NAV_INNER)], glyphs)
         elif r == 4:   # shift row: Up, indented to sit above Down
-            label = _label_at(layer, r * COLS + _UP_COL, "Up")
+            label = _label_at(layer, r * COLS + _UP_COL, "↑")
             right = [" " * _ARROW_INDENT + ln
                      for ln in _box([(label, _ARROW_INNER)], glyphs)]
         else:          # bottom row: Lft / Dwn / Rgt
@@ -249,6 +252,9 @@ def main() -> int:
                       help="layer to show, 1-indexed (default: 1)")
     show.add_argument("--corners", choices=("round", "square"), default="round",
                       help="key-box corner style (default: round)")
+    show.add_argument("--color", choices=("auto", "always", "never"),
+                      default="auto",
+                      help="colorize by key category (default: auto = TTY only)")
 
     edit = sub.add_parser(
         "edit", help="interactively edit the keymap by clicking keys (TUI; needs the 'tui' extra)")
@@ -271,7 +277,14 @@ def main() -> int:
         print(f"CyberBoard R4 — {args.config}  (layer {args.layer})")
     else:
         print("CyberBoard R4 — default layout (no config)")
-    print(render(layer, args.corners))
+    color = (args.color == "always"
+             or (args.color == "auto" and sys.stdout.isatty()
+                 and os.environ.get("NO_COLOR") is None))
+    if color:
+        import cb_keymap_color  # lazy: plain rendering needs no color module
+        print(cb_keymap_color.render_colored(layer, args.corners))
+    else:
+        print(render(layer, args.corners))
     return 0
 
 
