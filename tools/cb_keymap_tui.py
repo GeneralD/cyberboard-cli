@@ -9,7 +9,12 @@ Optional feature — needs the `textual` extra:  pip install 'cyberboard-cli[tui
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import tempfile
+from pathlib import Path
+from typing import ClassVar
 
 import cb_keymap
 import keycode
@@ -57,7 +62,7 @@ def _styled(layer: list[str], corners: str, changed: set[int]) -> Text:
 class KeyEditScreen(ModalScreen[str]):
     """Modal asking for the new assignment of one key."""
 
-    BINDINGS = [("escape", "cancel", "Cancel")]
+    BINDINGS: ClassVar = [("escape", "cancel", "Cancel")]
 
     def __init__(self, index: int, label: str, code: str) -> None:
         super().__init__()
@@ -95,7 +100,7 @@ class KeymapEditApp(App):
     #dialog { width: 72; height: auto; padding: 1 2; border: thick $accent; background: $surface; }
     Keyboard { padding: 0; }
     """
-    BINDINGS = [
+    BINDINGS: ClassVar = [
         ("s", "save", "Save"),
         ("q", "quit", "Quit"),
         ("left", "prev_layer", "Prev layer"),
@@ -111,6 +116,9 @@ class KeymapEditApp(App):
         self._corners = corners
         self._out = out_path
         self._changed = [set() for _ in layers]
+        # Snapshot the loaded values so a key reverted to its original is no
+        # longer counted/highlighted as changed.
+        self._original = [list(layer) for layer in layers]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -140,10 +148,15 @@ class KeymapEditApp(App):
             except (KeyError, ValueError) as e:
                 self.notify(str(e), title="invalid key", severity="error")
                 return
-            if new != layer[idx]:
-                layer[idx] = new
-                self._changed[self._n - 1].add(idx)
-                self._refresh()
+            if new == layer[idx]:
+                return
+            layer[idx] = new
+            changed = self._changed[self._n - 1]
+            if new == self._original[self._n - 1][idx]:
+                changed.discard(idx)
+            else:
+                changed.add(idx)
+            self._refresh()
 
         self.push_screen(KeyEditScreen(idx, cb_keymap.decode(code), code), _apply)
 
@@ -158,10 +171,22 @@ class KeymapEditApp(App):
             self._refresh()
 
     def action_save(self) -> None:
+        # Atomic save: write a temp file in the same dir, then os.replace — an
+        # interrupted write never truncates the user's (possibly only) config.
+        target = Path(self._out)
+        tmp_name = None
         try:
-            with open(self._out, "w") as f:
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=target.parent or ".", delete=False
+            ) as f:
+                tmp_name = f.name
                 json.dump(self._config, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            os.replace(tmp_name, target)
         except OSError as e:
+            if tmp_name is not None:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_name)
             self.notify(str(e), title="save failed", severity="error")
             return
         total = sum(len(c) for c in self._changed)
