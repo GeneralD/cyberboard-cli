@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-06-24 (続31) — `keymap show`: キーボード型 ASCII グリッドレンダラ(issue #38)
+
+ユーザー「ちゃんとグリッドを書いてくれなきゃ」(従来の `decode_keymap.py` のフラット表 `row0 (idx…): esc f1…`
+を却下、キーボードの形が頭に入らない)→ box-drawing でキーボード型に描く読み取り専用レンダラ
+`tools/cb_keymap.py` を実装。`cyberboard keymap show [CONFIG] [--layer N] [--corners round|square]`。
+**#37(TUI 編集)の描画土台**。旧 `decode_keymap.py`(wiki 送り)を置換。
+
+### ワークフロー(デザイン4案→審査→実装)= 部分失敗 → 直接実装で完了
+
++ ultracode でデザイン判定トーナメント(box-drawing 4 スタイル並列 → 審査 → 実装)を起動。だが
+  **design 4案中3案が失敗**(`Prompt is too long` ×2 / stream idle timeout ×1)、**implement も
+  timeout**(`implement: null`)。成功は full-box 案のみ → 審査が index0 を勝者に。
++ **再ワークフローせず勝者コード + 審査修正を自分で直接実装**(単一ファイル + cli.py 配線 = 直接の方が
+  確実)。勝者コード/ascii は return 値に無く、サブエージェント transcript の StructuredOutput から抽出。
++ 教訓: 大きな LAYOUT_SPEC + schema を全 design agent に配ると prompt 肥大で死ぬ。判定が主目的の
+  トーナメントは**仕様を小さく**するか、勝者だけ取り出して実装は手元でやる方が安定。
++ ⚠ 失敗 implement agent が `tools/cb_keymap_show.py`(別案 compact-bracket の書きかけ)を repo に
+  残していた → 未参照を確認の上削除。**ワークフロー失敗時は repo に残骸が出うる**(git status で要確認)。
+
+### 実装(`tools/cb_keymap.py`, 採用 = 行独立ボックス + 右クラスタ固定オフセット)
+
++ 物理レイアウト再現: function/media ストリップ、**右ナビ列**(Home/End/PgUp/PgDn の 4 キーのみ)、
+  ワイド Space バー、**逆 T 字矢印**(Up=shift 行 idx113 を Dwn の真上に / Lft/Dwn/Rgt=bottom 行)。
+  審査の主要修正=「Up をナビ列に 5 個目として混ぜるな、Dwn の真上へ」を反映。
++ レイアウトはデータ駆動(各セル = `(col, inner_width, default_label)`、matrix idx=`row*25+col`)。
+  ラベルは config 指定時 `#MMPPUUUU` デコード(短縮: HID `0x07`/`0x0C` テーブル、`0x92`=`Fn<hex>`、
+  `#00000000`=空セル)、CONFIG 省略時は組み込み R4 スケルトン。`--layer` 1-indexed。
++ **丸角(既定)** `╭╮╰╯`、`--corners square` で `┌┐└┘`。外周角だけ差し替え、内側 `┬┴` 接合は不変
+  なのでセル境界は連結したまま(ユーザー要望「かどを丸く」)。
++ cli.py に `keymap` → `cb_keymap` を配線(`show` サブコマンド、完成 = `SUBCOMMANDS["keymap"]=["show"]`)。
+  将来 `edit`(#37)を同じ subparser に足せる。
+
+### 検証 🟢
+
++ `keymap show`(スケルトン)で 6 行 + 右クラスタが正しく描画、逆 T 字 OK。`--corners square` 切替 OK。
+  synthetic config で decode 経路(Esc@idx0 / A@idx26 / 空セル)+ エラー系(`--layer` 範囲外・file 無し=
+  clean SystemExit)。find-debug クリーン。ローカル完全 config は repo 外で未テストだが synthetic で経路確認。
+
+### 次
+
++ #37(TUI 編集)= このレンダラ上に色 + カーソル + 編集。修飾キー記号化(⌘⌥⌃⇧)+ Nerd Font opt-off +
+  `~/.config/cyberboard-cli/config.toml` 設定土台。judge-panel 並列(v2)。
+
+---
+
 ## 2026-06-24 (続30) — プロジェクトルート片付け: 原始調査資材を GitHub wiki へ移設
 
 `/make-pr`「調査段階で散らかしたファイルを片付ける」。ユーザー決定(AskUserQuestion 推奨2点): 原始資材は

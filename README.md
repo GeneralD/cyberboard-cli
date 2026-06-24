@@ -93,6 +93,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `anim` | Render declarative LED animations (`render` / `preview` / `montage`) |
 | `compose` | Compose a `led.toml` manifest (multi-source slots) → IR |
 | `read` | Read config back from the device (`keymap`) |
+| `keymap` | Render the keymap as a keyboard-shaped ASCII grid (`show`) |
 | `write` | Write an IR config to the device |
 | `set-time` | Set the device RTC clock |
 | `completion` | Print a shell completion script (`bash` / `zsh` / `fish`) |
@@ -103,6 +104,7 @@ cyberboard anim preview -r examples/led/text-scroll.json -o preview.gif   # auth
 cyberboard led play -i preview.gif                              # play it right in the terminal (Ctrl-C to stop)
 cyberboard compose -m examples/led/compose.toml -b base.json -o config.json   # combine many sources per slot
 cyberboard build -k keymap.toml -b base.json -o config.json     # build a config from a TOML keymap
+cyberboard keymap show config.json --layer 1                    # view the keymap as a keyboard grid
 cyberboard write config.json --execute                          # write it (omit --execute for a dry run)
 ```
 

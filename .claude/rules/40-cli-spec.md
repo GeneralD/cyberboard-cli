@@ -268,12 +268,20 @@ ambctl verify config.json      # IRスキーマ検証(書き込まない)
 ambctl write  config.json [--section keymap|led|all] [--slot 1,2,3] [--dry-run]
 ambctl read   -o dump.json     # デバイス→IR 読み戻し(cmd_get_* 利用)
 ambctl diff   dump.json config.json   # 書き込み前後の差分確認
+cyberboard keymap show [CONFIG] [--layer N] [--corners round|square]  # keymap をキーボード型 ASCII グリッドで表示
 ```
 
 - **`devices` / `device info` は実装済みの土台あり**🟢: `tools/cb_device.py`(+ 共有コア
   `tools/cb_protocol.py`)。実機 R4 で動作確認済み(`90` 2026-06-22)。
   `list`/`info --json` を持ち、これをそのまま CLI サブコマンドへ昇格できる。
   プロジェクトローカル skill = [`cyberboard-device`](../skills/cyberboard-device/SKILL.md)。
+- **`keymap show` 実装済み 🟢**(`tools/cb_keymap.py`, `90` 続31, issue #38): keymap を
+  **キーボード型 ASCII グリッド**で表示する読み取り専用レンダラ。物理レイアウト再現
+  (function/media ストリップ / 右ナビ列 Home/End/PgUp/PgDn / ワイド Space / 逆 T 字矢印)+
+  丸角(既定 `╭╮╰╯`、`--corners square` で戻せる)。CONFIG 省略=R4 デフォルトスケルトン、
+  指定=layer を `#MMPPUUUU` デコードして流し込み(短縮ラベル: HID `0x07`/`0x0C` テーブル、
+  `0x92`=`Fn<hex>`、未割当=空セル)。**#37(TUI キーマップ編集)の描画土台**。旧 `decode_keymap.py`
+  (フラット表、wiki 送り)を置換。
 - **ユーザー向け対話 LED 作成 skill = プラグイン側 🟢**(`90` 続24 / 続27, issue #2 / #6 後半):
   `plugins/cyberboard/skills/cyberboard-led/SKILL.md`。`cyberboard anim/led/write` を
   オーケストレーションし AskUserQuestion で slot/効果を選ばせ preview 反復→明示確認→書込。
