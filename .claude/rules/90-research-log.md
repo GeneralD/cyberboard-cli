@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-06-24 (続30) — プロジェクトルート片付け: 原始調査資材を GitHub wiki へ移設
+
+`/make-pr`「調査段階で散らかしたファイルを片付ける」。ユーザー決定(AskUserQuestion 推奨2点): 原始資材は
+**wiki へ移して main から削除** / rules 参照は**ポインタ1行だけ**(全書換しない)。
+
+### やったこと
+
++ **wiki 移設**: 追跡していた `_re/zscan.py` + `_re/verify_encoding.py` と `experiments/`(frame-limit-256 /
+  keymap-matrix / partial-write / perkey-layout、計 10 ファイル)を [GitHub wiki](https://github.com/GeneralD/cyberboard-cli/wiki)
+  へ移設(Home インデックス + ツリー保持)。⚠ **wiki は `has_wiki=true` でも最初の1ページを web UI で作るまで
+  `.wiki.git` が未プロビジョニング**(SSH/HTTPS とも `Repository not found`、push 初期化も不可)→ ユーザーに
+  一度きりの初期化を依頼してから clone→push。逆コンパイル原典(`decompiled/`/`dc3/`/`AM_Master_extracted/`)は
+  著作物ゆえ wiki にも載せない(repo 同様ローカル限定)。
++ **main から削除**: `git rm experiments/ _re/{zscan,verify_encoding}.py`。`.gitignore` を `/_re/`(allowlist 撤去・
+  全体無視)/ `/experiments/` 追加 / `/.claude/worktrees/` 追加に修正。
++ **rules 参照**: `00-overview.md`「ドキュメントの使い方」にポインタ1行追加(原始資材は wiki / git 履歴を参照)。
+  他 rule の `experiments/...` 参照は**そのまま**(churn 最小=ユーザー選択)。
+
+### 次
+
++ judge-panel 並列(v2)/ per-key GIF(web-index↔keyframes-90)/ TUI エディタ。実機 end-to-end(compose/layers→write→目視)。
+
+---
+
 ## 2026-06-24 (続29) — #31 レイヤ合成 + 透過 bg(おまかせ基準強化)/ 「全部開始」#30/#31/#32 完了
 
 スキル改善3点(ユーザー指摘)を issue #30/#31/#32 に起票し ultracode「全部開始」で実装。#30(可変幅

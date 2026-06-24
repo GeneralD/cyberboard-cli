@@ -217,8 +217,8 @@ sources are **not** redistributed here — see *Legal*):
   `[2..62]` payload, `[63]` **CRC-8** (poly `0x07`).
 - **LED model:** `frames` = the 40×5 = 200-px top display; `keyframes` = the
   90 per-key backlights. Slots 1/2/3 = pages 5/6/7. *(Empirically verified:
-  active pages always pack to exactly 200 px / 90 px — see
-  [`_re/verify_encoding.py`](_re/verify_encoding.py).)*
+  active pages always pack to exactly 200 px / 90 px — see `verify_encoding.py`
+  in the [research wiki](https://github.com/GeneralD/cyberboard-cli/wiki).)*
 - **Send sequence and full command table** are documented in
   [`.claude/rules/30-write-protocol.md`](.claude/rules/30-write-protocol.md).
 
@@ -228,8 +228,7 @@ sources are **not** redistributed here — see *Legal*):
 |---|---|
 | [`.claude/rules/`](.claude/rules/) | The protocol & schema knowledge base (Japanese) — start at `00-overview.md` |
 | `.claude/rules/30-write-protocol.md` | The definitive write-protocol spec (transport, frames, CRC, command table, send order) |
-| [`_re/verify_encoding.py`](_re/verify_encoding.py) | Standalone encoder that re-derives the byte packing and checks it against real config JSON (no device needed) |
-| `_re/zscan.py` | Pure-Python zlib brute-scanner used in the first static-analysis pass |
+| [Research wiki](https://github.com/GeneralD/cyberboard-cli/wiki) | Raw reverse-engineering scripts (`verify_encoding.py`, `zscan.py`) and protocol experiments, moved out of the repo tree |
 
 > Confidence is marked throughout: 🟢 source-confirmed · 🟡 strong inference ·
 > 🔴 needs live-hardware capture.

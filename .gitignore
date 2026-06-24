@@ -7,11 +7,16 @@ AM_Master_mac_*.pkg
 AM_Master_mac_*_extracted/
 
 # Reverse-engineering artifacts live only on the local machine.
-# Ignore everything under _re/ ...
-/_re/*
-# ... except our own first-party tooling (analysis scripts we wrote).
-!/_re/verify_encoding.py
-!/_re/zscan.py
+# All of _re/ (decompiled sources, scans, analysis scripts) stays local;
+# the first-party research scripts now live in the GitHub wiki.
+/_re/
+
+# Research-phase experiments moved to the GitHub wiki (kept out of the
+# project root). Local scratch under experiments/ stays untracked.
+/experiments/
+
+# Claude Code worktrees (transient, per-agent working copies)
+/.claude/worktrees/
 
 # macOS
 .DS_Store
