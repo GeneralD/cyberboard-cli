@@ -73,8 +73,10 @@ uvx --from 'cyberboard-cli[led]' cyberboard --help
 > / `compose`), and the keymap editor (`keymap edit`). `pillow` ships as a
 > prebuilt wheel and `textual` is pure Python, so installs stay quick (~30 s, not
 > a long source build). Only the `[verify]` and `[mcp]` extras aren't bundled
-> (both degrade gracefully); add them with
-> `uv tool install 'cyberboard-cli[verify,mcp]'` if you need them.
+> (both degrade gracefully). If you want them, install a separate
+> `uv tool install 'cyberboard-cli[all]'` — use `[all]` (not just
+> `[verify,mcp]`) so that environment can also render LED when it runs the MCP
+> server.
 
 **Developing on a clone?** Run it straight from the source tree, no install:
 
