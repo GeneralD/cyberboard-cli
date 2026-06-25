@@ -30,7 +30,7 @@ differ only in *how* it lands on your machine.
 
 | If you want… | Use | You get |
 |---|---|---|
-| macOS, simplest, shell completion wired for you | **Homebrew** | core (device I/O) |
+| macOS, simplest, shell completion wired for you | **Homebrew** | core + LED + keymap edit (TUI) |
 | One isolated global command, any OS | **uv tool** or **pipx** | core + whatever extras you ask for |
 | It inside a project / existing venv | **pip** | core + extras |
 | To try it once without installing | **uvx** | ephemeral, extras on the fly |
@@ -52,7 +52,7 @@ setup stays lean. Add them in brackets, e.g. `'cyberboard-cli[led,verify]'`:
 ### Commands
 
 ```sh
-# Homebrew (macOS) — device I/O + bash/zsh/fish completion auto-wired:
+# Homebrew (macOS) — full app (device I/O + LED + keymap edit), completion auto-wired:
 brew install GeneralD/tap/cyberboard-cli
 
 # uv tool — isolated global command (recommended for the full feature set):
@@ -69,10 +69,14 @@ pip install 'cyberboard-cli[led]'
 uvx --from 'cyberboard-cli[led]' cyberboard --help
 ```
 
-> **Homebrew is core-only.** LED authoring (`anim` / `led` / `compose`) needs
-> `pillow`, which would force a ~30-minute source build under brew (the tap ships
-> no prebuilt bottles), so it isn't bundled there. For LED on every platform, use
-> `uv tool install 'cyberboard-cli[led]'` (or pipx / pip).
+> **Homebrew bundles the full app** — device I/O, LED authoring (`anim` / `led`
+> / `compose`), and the keymap editor (`keymap edit`). `pillow` ships as a
+> prebuilt wheel and `textual` is pure Python, so installs stay quick (~30 s, not
+> a long source build). Only the `[verify]` and `[mcp]` extras aren't bundled
+> (both degrade gracefully). If you want them, install a separate
+> `uv tool install 'cyberboard-cli[all]'` — use `[all]` (not just
+> `[verify,mcp]`) so that environment can also render LED when it runs the MCP
+> server.
 
 **Developing on a clone?** Run it straight from the source tree, no install:
 
