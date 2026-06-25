@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cyberboard-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Configure the AngryMiao CyberBoard R4 (keymap + LED) over USB without AM Master"
 readme = "README.md"
 requires-python = ">=3.11"
