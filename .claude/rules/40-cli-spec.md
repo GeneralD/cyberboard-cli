@@ -54,14 +54,19 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   `$CYBERBOARD_DATA_DIR` > `$XDG_DATA_HOME/cyberboard-cli` > `~/.local/share/cyberboard-cli`。
 - **レイアウト**: `<root>/devices/<product_id>/` に `current.json`(最後に書いた full IR =
   LED の source of truth)/ `meta.json`(product_id, version, last_seen)/ `history/<ISO8601>.json`
-  (自動スナップ。`90`/issue #47 で追加)。
+  (自動スナップ 🟢 issue #47)。
 - **個体キー = `product_id`(例 `CB04`)単一機割り切り** 🟢: R4 の USB シリアルはダミー(全個体
   同一・実機確認 2026-06-26)、product_id/version も全 R4 共通 → 電気的に2台を区別できないため
   個体識別はせず product_id をキーにする。`_safe_key` で path traversal を弾く。
 - **`cb_store.py`(🟢 実装済み, issue #46)**: pure stdlib(serial/PIL 不要 = core)。公開 API =
   `store_root` / `device_dir` / `load_current` / `save_current`(原子的書込 + meta 更新)/
   `load_meta` / `record_seen`(read 系が last_seen のみ更新)。CLI は `cyberboard store path
-  [--device CB04]` / `cyberboard store --selftest`。snapshot/history は #47 で同モジュールに追加。
+  [--device CB04]` / `cyberboard store --selftest`。書込は per-device flock で current+meta を排他。
+- **自動スナップショット(🟢 実装済み, issue #47)**: `snapshot(product_id, ir)` が
+  `history/<ISO8601>.json`(`:`→`-`・マイクロ秒 + 衝突ガード)へ保存し、保持上限を超えた古い順に
+  prune。`list_history`(新しい順)/ 上限 = `CYBERBOARD_HISTORY_MAX`(既定 50)。flock は per-fd ゆえ
+  `snapshot` と `save_current` は**入れ子にせず順次**呼ぶ(writer は before-snapshot → save の2ステップ、
+  自己デッドロック回避)。
 - これを叩く `dump`(provenance 付きハイブリッド: keymap=ライブ / LED=stored)/ `get` / `set key`
   / `set led` / `history` / `restore` / `diff` は epic #45 の各 issue(#48-#54)で実装。
 
