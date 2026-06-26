@@ -270,6 +270,32 @@ def write_config(port: str, frames: tuple[bytes, ...], *, timeout: float = 10.0)
         ser.close()
 
 
+def _record_write(product_id: str, config: dict, version: str | None) -> None:
+    """Persist the just-written full IR to the state store (snapshot + current).
+
+    `cyberboard write --execute` is the natural source of truth for `current.json`:
+    LED frames can't be read back, so the last full IR we wrote is the only record
+    of the device's LED state — without this, `dump`'s LED=last-written hybrid never
+    works in a normal workflow (a dump right after a write would report LED=unknown).
+
+    The device write already succeeded by the time we get here; a store failure must
+    NOT mask that, so any error is a warning, never a non-zero exit. snapshot then
+    save_current are sequential locked steps — never nested (cb_store's flock is
+    per-fd; nesting would self-deadlock). `_provenance` (added by `dump`) is stripped
+    so `current.json` stays a clean full IR.
+    """
+    import cb_store
+
+    ir = {k: v for k, v in config.items() if k != "_provenance"}
+    try:
+        snap = cb_store.snapshot(product_id, ir)
+        cb_store.save_current(product_id, ir, version=version)
+        print(f"state store: current.json updated; snapshot {snap.stem}")
+    except OSError as e:
+        print(f"warning: wrote the device but could not update the state store ({e}); "
+              "current.json may be stale.", file=sys.stderr)
+
+
 def _resolve_port(arg: str | None) -> str | None:
     if arg is not None:
         return arg
@@ -327,7 +353,12 @@ def main() -> int:
     time.sleep(0.5)
     after = probe(port, full=True)
     print(f"after:  {after.product_id if after else 'NO RESPONSE'} / {after.version if after else '?'}")
-    return 0 if ok and after and after.is_cyberboard else 1
+    success = bool(ok and after and after.is_cyberboard)
+    # Record only a confirmed write: a non-ACK or a device that isn't the expected
+    # CyberBoard afterward means current.json would be a lie, so don't persist it.
+    if success:
+        _record_write(after.product_id, config, after.version)
+    return 0 if success else 1
 
 
 if __name__ == "__main__":
