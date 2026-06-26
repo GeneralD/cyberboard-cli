@@ -43,6 +43,28 @@
 > ⚠ **書込直後の read-back は settle 遅延が必要**: フル書込直後の keymap 読戻しは全 `#00000000`
 > を返した(commit 未完了)。**~2 秒待つ**と 1400/1400 一致。検証読戻し前に必ず待つ。
 
+### ステートフルなデバイス設定管理(state store / `cb_store.py`)— epic #45
+
+「キーマップ/LED を直接コマンドで編集」+「毎操作で更新履歴を保存しロールバック可能に」する
+機能群(= "git for keyboard")。実体は上の制約どおり **read → merge → フル書き込み**、加えて
+**書いたフル IR を個体ごとにローカル保存**する。LED は読み戻せないので、**最後に書いた IR が
+LED の唯一の真実**= これを保持しないと「keymap だけ変更・LED 維持」が成立しない。
+
+- **保存ルート解決ラダー**(先に設定されたものが勝つ):
+  `$CYBERBOARD_DATA_DIR` > `$XDG_DATA_HOME/cyberboard-cli` > `~/.local/share/cyberboard-cli`。
+- **レイアウト**: `<root>/devices/<product_id>/` に `current.json`(最後に書いた full IR =
+  LED の source of truth)/ `meta.json`(product_id, version, last_seen)/ `history/<ISO8601>.json`
+  (自動スナップ。`90`/issue #47 で追加)。
+- **個体キー = `product_id`(例 `CB04`)単一機割り切り** 🟢: R4 の USB シリアルはダミー(全個体
+  同一・実機確認 2026-06-26)、product_id/version も全 R4 共通 → 電気的に2台を区別できないため
+  個体識別はせず product_id をキーにする。`_safe_key` で path traversal を弾く。
+- **`cb_store.py`(🟢 実装済み, issue #46)**: pure stdlib(serial/PIL 不要 = core)。公開 API =
+  `store_root` / `device_dir` / `load_current` / `save_current`(原子的書込 + meta 更新)/
+  `load_meta` / `record_seen`(read 系が last_seen のみ更新)。CLI は `cyberboard store path
+  [--device CB04]` / `cyberboard store --selftest`。snapshot/history は #47 で同モジュールに追加。
+- これを叩く `dump`(provenance 付きハイブリッド: keymap=ライブ / LED=stored)/ `get` / `set key`
+  / `set led` / `history` / `restore` / `diff` は epic #45 の各 issue(#48-#54)で実装。
+
 ## 独自スキーマ案
 
 ### キーマップ `keymap.toml`(v1 仕様)

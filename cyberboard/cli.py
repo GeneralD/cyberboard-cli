@@ -56,6 +56,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "keymap": ("cb_keymap", [], "keyboard-shaped keymap grid: show, or edit (TUI, click to reassign)"),
     "write": ("cb_write", [], "write an IR config to the device"),
     "set-time": ("cb_settime", [], "set the device RTC clock"),
+    "store": ("cb_store", [], "where per-device configs are saved (path / --selftest)"),
 }
 
 # Meta commands handled by the dispatcher itself (not a cb_* tool).
@@ -68,6 +69,7 @@ SUBCOMMANDS: dict[str, list[str]] = {
     "keymap": ["show", "edit"],
     "led": ["gif2ir", "ir2gif", "play", "recipe"],
     "anim": ["render", "preview", "montage"],
+    "store": ["path"],
     "completion": ["bash", "zsh", "fish"],
 }
 
