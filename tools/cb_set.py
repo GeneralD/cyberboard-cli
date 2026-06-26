@@ -185,8 +185,15 @@ def _cmd_key(args) -> int:
     # Confirm the write landed via the [6,9] read-back — the only readable half
     # (LED can't be read back). Compare the *whole* keymap, not just the edited
     # cell: a partial/corrupt write could leave the target right yet other keys
-    # wrong, and a truncated read fails the match instead of crashing.
-    readback = cb_read.read_keymap(port)
+    # wrong, and a truncated read fails the match instead of crashing. A bad-CRC
+    # frame or serial error *after* the ACK is itself a verification failure
+    # (SerialException subclasses OSError), so report it cleanly and leave
+    # current.json untouched rather than tracebacking past save_current.
+    try:
+        readback = cb_read.read_keymap(port)
+    except (ValueError, OSError) as e:
+        print(f"read-back failed ({e}); not recording current.", file=sys.stderr)
+        return 1
     if not _keymap_matches(readback, new_ir["key_layer"]):
         print("read-back keymap does not match what we wrote; not recording current.",
               file=sys.stderr)
