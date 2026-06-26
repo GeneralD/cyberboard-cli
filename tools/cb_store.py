@@ -33,9 +33,12 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import re
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,6 +82,24 @@ def current_path(product_id: str) -> Path:
 
 def meta_path(product_id: str) -> Path:
     return device_dir(product_id) / "meta.json"
+
+
+@contextlib.contextmanager
+def device_lock(product_id: str):
+    """Exclusive per-device advisory lock (flock on `<device_dir>/.lock`).
+
+    Holds for a whole compound write so two concurrent CLI processes can't
+    interleave the current.json + meta.json pair (or, later, a snapshot+save
+    sequence) and leave them describing different states. fcntl is Unix-only,
+    which matches the macOS/Linux serial-port target.
+    """
+    lock_path = device_dir(product_id, create=True) / ".lock"
+    with open(lock_path, "w", encoding="utf-8") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def _atomic_write_json(path: Path, obj: object) -> None:
@@ -138,8 +159,8 @@ def record_seen(product_id: str, *, version: str | None = None) -> dict:
     Use from read-only commands (`dump` / `get`) so last_seen tracks reality even
     when nothing is written.
     """
-    device_dir(product_id, create=True)
-    return _update_meta(product_id, version=version)
+    with device_lock(product_id):
+        return _update_meta(product_id, version=version)
 
 
 def save_current(product_id: str, ir: dict, *, version: str | None = None) -> Path:
@@ -148,10 +169,10 @@ def save_current(product_id: str, ir: dict, *, version: str | None = None) -> Pa
     Returns the path to current.json. (Snapshotting into history/ is a separate
     concern, added by the auto-snapshot issue, so writers can compose the two.)
     """
-    device_dir(product_id, create=True)
     path = current_path(product_id)
-    _atomic_write_json(path, ir)
-    _update_meta(product_id, version=version)
+    with device_lock(product_id):
+        _atomic_write_json(path, ir)
+        _update_meta(product_id, version=version)
     return path
 
 
@@ -233,7 +254,14 @@ def main() -> int:
     if args.selftest:
         return _selftest()
     if args.cmd == "path":
-        print(device_dir(args.device) if args.device else store_root())
+        if not args.device:
+            print(store_root())
+            return 0
+        try:
+            print(device_dir(args.device))
+        except ValueError as e:
+            print(f"cb_store: {e}", file=sys.stderr)
+            return 2
         return 0
     ap.print_help()
     return 0
