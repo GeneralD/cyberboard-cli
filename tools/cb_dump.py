@@ -174,7 +174,9 @@ def main() -> int:
 
     try:
         out, prov = dump_ir(device, stored_pid=_stored_product_id())
-    except ValueError as e:
+    except (ValueError, OSError) as e:
+        # OSError covers store stat/read failures (e.g. _file_ts on a vanished
+        # current.json) — surface them in the same clean dump: style, not a traceback.
         print(f"dump: {e}", file=sys.stderr)
         return 1
 
@@ -186,7 +188,11 @@ def main() -> int:
 
     text = json.dumps(out, indent=2, ensure_ascii=False) + "\n"
     if args.output:
-        Path(args.output).write_text(text, encoding="utf-8")
+        try:
+            Path(args.output).write_text(text, encoding="utf-8")
+        except OSError as e:
+            print(f"dump: {e}", file=sys.stderr)
+            return 1
         print(f"dump: wrote {args.output}", file=sys.stderr)
     else:
         sys.stdout.write(text)
