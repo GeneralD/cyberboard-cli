@@ -76,8 +76,15 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   上書き、未接続時は stored copy へ縮退(明示警告)。device も current も無ければ clean error。
   `record_seen` で dump 時も last_seen 更新。`-o` 省略 = stdout。**実機 R4 で primary path 確認済み**
   (2026-06-26: keymap=live 7×200 + LED=last-written、find-debug クリーン)。
-- これを叩く `get` / `set key` / `set led` / `history` / `restore` / `diff` は epic #45 の
-  残 issue(#49-#54)で実装。
+- **`diff`(🟢 実装済み, issue #49, `cb_diff.py`)**: `cyberboard diff <a> <b> [--device CB04]`。pure
+  stdlib(serial/PIL 不要 = core、ファイル同士なら device 不要)。各引数を**ファイルパス** or
+  **store 参照**(`current` / snapshot stem〔先頭一致可〕)として独立解決。cb_read `--compare` の
+  device-vs-config keymap 差分を **config-vs-config** へ一般化 + **slot ごとの LED frame 数差分**を追加。
+  keymap は位置ごと(layer/idx, old→new)、LED は slot 1/2/3(page 5/6/7)の display/per-key `frame_num` を
+  比較(**pixel は比較しない** — LED 読戻し不可ゆえ frame 数が確実な信号)。exit = 0 同一 / 1 差分あり /
+  2 解決エラー(diff ツール準拠)。sole-device 解決は `cb_store.sole_device()`(cb_dump と共有)。
+- これを叩く `get` / `set key` / `set led` / `history` / `restore` は epic #45 の
+  残 issue(#50-#54)で実装。
 
 ## 独自スキーマ案
 

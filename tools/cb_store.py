@@ -68,6 +68,20 @@ def _safe_key(product_id: str) -> str:
     return key
 
 
+def sole_device() -> str | None:
+    """The single stored device key, or None when zero or several exist.
+
+    Single-device is the supported case (the R4 has no per-unit identity), so
+    offline commands (dump / diff) can unambiguously target the one device dir
+    when exactly one exists; we refuse to guess between several.
+    """
+    devices = store_root() / "devices"
+    if not devices.is_dir():
+        return None
+    keys = [d.name for d in devices.iterdir() if d.is_dir()]
+    return keys[0] if len(keys) == 1 else None
+
+
 def device_dir(product_id: str, *, create: bool = False) -> Path:
     """`<root>/devices/<product_id>/`. Create it (and parents) when `create`."""
     d = store_root() / "devices" / _safe_key(product_id)
