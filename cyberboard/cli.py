@@ -57,6 +57,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "write": ("cb_write", [], "write an IR config to the device"),
     "set-time": ("cb_settime", [], "set the device RTC clock"),
     "store": ("cb_store", [], "where per-device configs are saved (path / --selftest)"),
+    "get": ("cb_get", [], "show current config in the terminal (live keymap grid + stored LED)"),
     "dump": ("cb_dump", [], "dump current config (live keymap + stored LED) to a file/stdout"),
     "diff": ("cb_diff", [], "diff two configs (snapshot refs or files): keymap + LED frame counts"),
     "history": ("cb_history", [], "list a device's saved snapshots (newest first)"),
