@@ -99,7 +99,13 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   - `save_current` で current.json 更新(`dump`/`diff current` が stale な LED を報告しない)。snapshot→
   save_current は**順次**(flock per-fd ゆえ入れ子不可)。pure stdlib の解決 + dry-run(device 不要)。
   ⚠ **実機 `--execute` は未検証**(M1 write 経路は実証済み、本コマンド経由は要実機)。
-- これを叩く `get` / `set key` / `set led` は epic #45 の残 issue(#52-#54)で実装。
+- **`get`(🟢 実装済み, issue #52, `cb_get.py`)**: `cyberboard get [PORT] [--layer N | --all-layers]`。dump の
+  **人間可読版**。`cb_dump.dump_ir` で同じ hybrid gather(keymap=ライブ / LED=stored、provenance 付き)を取り、
+  JSON でなく端末向けに整形: provenance ヘッダ + **keymap をレイヤ別グリッド**(`cb_keymap.render` 再利用 =
+  `keymap show` と同じデコード)+ **LED slot ごとの display/per-key frame 数**。既定は layer 1(`--layer N` /
+  `--all-layers`)。device offline は stored へ縮退(`keymap=stored@<ts>` 明示)、LED 未保存は clean に
+  「(none stored)」、device も current も無ければ clean error(exit 1)。`record_seen` で観測も記録(dump 経由)。
+- これを叩く `set key` / `set led` は epic #45 の残 issue(#53-#54)で実装。
 
 ## 独自スキーマ案
 
@@ -326,6 +332,7 @@ ambctl verify config.json      # IRスキーマ検証(書き込まない)
 ambctl write  config.json [--section keymap|led|all] [--slot 1,2,3] [--dry-run]
 ambctl read   -o dump.json     # デバイス→IR 読み戻し(cmd_get_* 利用)
 ambctl diff   dump.json config.json   # 書き込み前後の差分確認
+cyberboard get [PORT] [--layer N | --all-layers]  # 現在値を端末表示(keymap=ライブ・グリッド / LED=stored・frame 数)
 cyberboard keymap show [CONFIG] [--layer N] [--corners round|square] [--color auto|always|never]  # keymap をキーボード型 ASCII グリッドで表示(カテゴリ別カラー + ⌘⌥⌃⇧/矢印 記号)
 cyberboard keymap edit CONFIG [--layer N] [--corners round|square] [-o OUT]  # 対話的 TUI でキーをクリック→再割当(同じカラー表示・[tui] extra)
 ```

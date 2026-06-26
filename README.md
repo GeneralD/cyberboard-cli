@@ -102,6 +102,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `write` | Write an IR config to the device |
 | `set-time` | Set the device RTC clock |
 | `store` | Where per-device configs are saved (`path` shows the resolved root; `--selftest`) |
+| `get` | Show the current config in the terminal — live keymap grid (per layer) + stored LED frame counts, labelled by provenance (`--layer N` / `--all-layers`) |
 | `dump` | Dump the current config to a file/stdout — hybrid: live keymap + stored LED, each labelled by provenance (`-o FILE`) |
 | `diff` | Diff two configs (snapshot refs or files): per-position keymap + per-slot LED frame counts (`diff <a> <b>`) |
 | `history` | List a device's saved snapshots (newest first) with size + provenance — the refs `diff` / `restore` accept |
