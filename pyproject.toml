@@ -54,5 +54,9 @@ packages = ["cyberboard"]
 # The cb_* tool modules live in tools/ as standalone scripts. Ship them
 # inside the wheel as cyberboard/_tools so an installed `cyberboard` finds
 # them (the dispatcher prefers ../tools in the repo, then this path).
+# presets/ holds the R4 keymap alias table; keymap_alias._preset_path()
+# resolves it relative to the package (cyberboard/presets in the wheel),
+# so it must be shipped too or alias resolution raises FileNotFoundError.
 [tool.hatch.build.targets.wheel.force-include]
 "tools" = "cyberboard/_tools"
+"presets" = "cyberboard/presets"
