@@ -105,6 +105,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `dump` | Dump the current config to a file/stdout — hybrid: live keymap + stored LED, each labelled by provenance (`-o FILE`) |
 | `diff` | Diff two configs (snapshot refs or files): per-position keymap + per-slot LED frame counts (`diff <a> <b>`) |
 | `history` | List a device's saved snapshots (newest first) with size + provenance — the refs `diff` / `restore` accept |
+| `restore` | Re-write a past snapshot to the device — undo/rollback (`restore <ref>`, `<ref>` = `latest` or a timestamp; dry-run unless `--execute`) |
 | `completion` | Print a shell completion script (`bash` / `zsh` / `fish`) |
 
 ```sh

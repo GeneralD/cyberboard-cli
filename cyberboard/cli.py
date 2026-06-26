@@ -60,6 +60,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "dump": ("cb_dump", [], "dump current config (live keymap + stored LED) to a file/stdout"),
     "diff": ("cb_diff", [], "diff two configs (snapshot refs or files): keymap + LED frame counts"),
     "history": ("cb_history", [], "list a device's saved snapshots (newest first)"),
+    "restore": ("cb_restore", [], "re-write a past snapshot to the device (undo; dry-run by default)"),
 }
 
 # Meta commands handled by the dispatcher itself (not a cb_* tool).
