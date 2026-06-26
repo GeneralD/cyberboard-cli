@@ -94,6 +94,15 @@ def edit_led(ir: dict, slot: int, source: str, *, kind: str | None = None,
         recipe = json.loads(path.read_text(encoding="utf-8"))
         _slot, rec_speed, frames = cb_anim._render_recipe(recipe)  # caps at MAX_FRAMES
         speed = speed_ms if speed_ms is not None else rec_speed
+    # Reject out-of-range control values here, before they reach the codec /
+    # writer: lightness is encoded as one byte (schema bounds it 0..100) and
+    # speed_ms as a signed 16-bit value, so unchecked inputs would either be
+    # persisted out-of-schema or crash during frame planning rather than
+    # producing a clean user error.
+    if lightness is not None and not (0 <= lightness <= 100):
+        raise ValueError(f"--lightness {lightness} out of range (0..100)")
+    if speed is not None and not (0 <= speed <= 32767):
+        raise ValueError(f"speed_ms {speed} out of range (0..32767)")
     new_ir = copy.deepcopy(ir)
     page = cb_led.frames_to_page(new_ir, slot, frames, speed, lightness)
     return new_ir, page["page_index"], page["frames"]["frame_num"], page.get("speed_ms")
