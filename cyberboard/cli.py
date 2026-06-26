@@ -57,6 +57,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "write": ("cb_write", [], "write an IR config to the device"),
     "set-time": ("cb_settime", [], "set the device RTC clock"),
     "store": ("cb_store", [], "where per-device configs are saved (path / --selftest)"),
+    "dump": ("cb_dump", [], "dump current config (live keymap + stored LED) to a file/stdout"),
 }
 
 # Meta commands handled by the dispatcher itself (not a cb_* tool).

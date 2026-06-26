@@ -102,6 +102,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `write` | Write an IR config to the device |
 | `set-time` | Set the device RTC clock |
 | `store` | Where per-device configs are saved (`path` shows the resolved root; `--selftest`) |
+| `dump` | Dump the current config to a file/stdout — hybrid: live keymap + stored LED, each labelled by provenance (`-o FILE`) |
 | `completion` | Print a shell completion script (`bash` / `zsh` / `fish`) |
 
 ```sh
