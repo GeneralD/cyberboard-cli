@@ -83,7 +83,12 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   keymap は位置ごと(layer/idx, old→new)、LED は slot 1/2/3(page 5/6/7)の display/per-key `frame_num` を
   比較(**pixel は比較しない** — LED 読戻し不可ゆえ frame 数が確実な信号)。exit = 0 同一 / 1 差分あり /
   2 解決エラー(diff ツール準拠)。sole-device 解決は `cb_store.sole_device()`(cb_dump と共有)。
-- これを叩く `get` / `set key` / `set led` / `history` / `restore` は epic #45 の
+- **`history`(🟢 実装済み, issue #50, `cb_history.py`)**: `cyberboard history [--device CB04]`。pure
+  stdlib。`devices/<product_id>/history/` を**新しい順**に列挙し、`current` を先頭(`*` マーク + 書込
+  時刻)に示す。各行 = ref(snapshot stem or `current` = diff/restore に渡す値)+ サイズ + provenance
+  (stored IR に `_provenance` があれば `keymap=…, led=…`)。空(device 未保存)は clean に「no history yet」、
+  device 未解決は stderr + exit 1。
+- これを叩く `get` / `set key` / `set led` / `restore` は epic #45 の
   残 issue(#50-#54)で実装。
 
 ## 独自スキーマ案
