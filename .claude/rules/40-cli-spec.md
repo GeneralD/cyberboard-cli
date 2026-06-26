@@ -67,8 +67,17 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   prune。`list_history`(新しい順)/ 上限 = `CYBERBOARD_HISTORY_MAX`(既定 50)。flock は per-fd ゆえ
   `snapshot` と `save_current` は**入れ子にせず順次**呼ぶ(writer は before-snapshot → save の2ステップ、
   自己デッドロック回避)。
-- これを叩く `dump`(provenance 付きハイブリッド: keymap=ライブ / LED=stored)/ `get` / `set key`
-  / `set led` / `history` / `restore` / `diff` は epic #45 の各 issue(#48-#54)で実装。
+- **`dump`(🟢 実装済み, issue #48, `cb_dump.py`)**: `cyberboard dump [PORT] [-o FILE]`。現在設定を
+  1 ファイルに吸い出す**ハイブリッド** — keymap は `cb_read`(`[6,9]`)でライブ取得、LED/page_data は
+  `current.json` から。両者を full IR に合成し、**provenance を `_provenance` ブロックとして IR に
+  埋め込み**(top-level `additionalProperties:true` ゆえ schema を壊さない=full jsonschema validation
+  pass を実機 dump で確認)+ stderr に 1 行要約。provenance 値 = keymap:`live`/`stored@<ts>`/`unknown`、
+  LED:`last-written@<ts>`/`unknown`(ts = `current.json` の mtime)。実機接続時は live keymap が stored を
+  上書き、未接続時は stored copy へ縮退(明示警告)。device も current も無ければ clean error。
+  `record_seen` で dump 時も last_seen 更新。`-o` 省略 = stdout。**実機 R4 で primary path 確認済み**
+  (2026-06-26: keymap=live 7×200 + LED=last-written、find-debug クリーン)。
+- これを叩く `get` / `set key` / `set led` / `history` / `restore` / `diff` は epic #45 の
+  残 issue(#49-#54)で実装。
 
 ## 独自スキーマ案
 
