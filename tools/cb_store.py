@@ -176,6 +176,67 @@ def save_current(product_id: str, ir: dict, *, version: str | None = None) -> Pa
     return path
 
 
+HISTORY_MAX_DEFAULT = 50
+
+
+def _history_max() -> int:
+    """Snapshot retention cap (env `CYBERBOARD_HISTORY_MAX`, else 50)."""
+    raw = os.environ.get("CYBERBOARD_HISTORY_MAX")
+    if raw is None:
+        return HISTORY_MAX_DEFAULT
+    try:
+        n = int(raw)
+    except ValueError:
+        raise ValueError(f"CYBERBOARD_HISTORY_MAX must be an integer, got {raw!r}")
+    if n < 1:
+        raise ValueError(f"CYBERBOARD_HISTORY_MAX must be >= 1, got {n}")
+    return n
+
+
+def history_dir(product_id: str, *, create: bool = False) -> Path:
+    """`<device_dir>/history/` — the timestamped snapshot folder."""
+    d = device_dir(product_id) / "history"
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def list_history(product_id: str) -> list[Path]:
+    """Snapshot files, newest first. ISO8601 names sort lexically = chronologically."""
+    d = history_dir(product_id)
+    if not d.exists():
+        return []
+    return sorted(d.glob("*.json"), reverse=True)
+
+
+def _prune_history(product_id: str) -> None:
+    """Drop the oldest snapshots beyond the retention cap."""
+    for old in list_history(product_id)[_history_max():]:
+        old.unlink(missing_ok=True)
+
+
+def snapshot(product_id: str, ir: dict) -> Path:
+    """Write `ir` as a timestamped snapshot under history/, then prune to the cap.
+
+    Returns the snapshot path. Locks independently (not nested with
+    `save_current`): a writer takes a before-snapshot then saves current as two
+    sequential locked steps — flock is per-fd, so nesting two `device_lock`s in
+    one process would self-deadlock. The brief gap is acceptable for a
+    single-user device CLI (history vs current are independent files).
+    """
+    with device_lock(product_id):
+        d = history_dir(product_id, create=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
+        path = d / f"{stamp}.json"
+        suffix = 1
+        while path.exists():  # same-microsecond collision guard (rare)
+            path = d / f"{stamp}-{suffix}.json"
+            suffix += 1
+        _atomic_write_json(path, ir)
+        _prune_history(product_id)
+    return path
+
+
 def _check(cond: bool, msg: str) -> None:
     """Self-test guard. Explicit raise (not `assert`) so `-O` can't strip it."""
     if not cond:
@@ -186,7 +247,8 @@ def _selftest() -> int:
     """Round-trip the store in an isolated temp dir; verify the ladder + persistence."""
     import shutil
 
-    saved = {k: os.environ.get(k) for k in ("CYBERBOARD_DATA_DIR", "XDG_DATA_HOME")}
+    saved = {k: os.environ.get(k)
+             for k in ("CYBERBOARD_DATA_DIR", "XDG_DATA_HOME", "CYBERBOARD_HISTORY_MAX")}
     tmp = Path(tempfile.mkdtemp(prefix="cb_store_selftest_"))
     try:
         # --- ladder: env override wins ---
@@ -220,6 +282,15 @@ def _selftest() -> int:
         record_seen(pid, version="AM_CB040.N40.R1.01.51")
         _check(load_current(pid) == ir, "record_seen must not touch current.json")
         _check(load_meta(pid)["version"] == "AM_CB040.N40.R1.01.51", "record_seen bumps version")
+
+        # --- snapshots accumulate, newest first, and prune to the cap ---
+        _check(list_history(pid) == [], "no history before first snapshot")
+        os.environ["CYBERBOARD_HISTORY_MAX"] = "3"
+        snaps = [snapshot(pid, {"n": i}) for i in range(5)]
+        _check(len(set(snaps)) == 5, "each snapshot gets a distinct filename")
+        kept = list_history(pid)
+        _check(len(kept) == 3, f"prune keeps the cap of 3, got {len(kept)}")
+        _check([_read_json(p)["n"] for p in kept] == [4, 3, 2], "newest-first, oldest pruned")
 
         # --- path traversal is rejected ---
         for bad in ("../evil", "a/b", "", "CB 04"):
