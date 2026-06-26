@@ -33,7 +33,25 @@ from pathlib import Path
 
 import cb_store
 from cb_device import DeviceInfo, list_devices, probe
-from cb_read import read_keymap
+from cb_read import DEFAULT_LAYERS, KEYS_PER_LAYER, read_keymap
+
+
+def _require_full_keymap(layers: list[list[str]]) -> None:
+    """Reject a truncated live read before it can overwrite stored data.
+
+    A timed-out / partial [6,9] stream makes read_keymap slice whatever frames
+    arrived into short or empty layers. Labelling that `live` and emitting it
+    is dangerous: written back later it would erase the real keymap. So a dump
+    must capture the full 7x200 matrix or fail loudly (the caller turns this
+    into a clean error + exit 1, prompting a retry) — never a silent partial.
+    """
+    bad = [i for i, layer in enumerate(layers) if len(layer) != KEYS_PER_LAYER]
+    if len(layers) != DEFAULT_LAYERS or bad:
+        raise ValueError(
+            f"live keymap read is incomplete (got {len(layers)} layers; "
+            f"expected {DEFAULT_LAYERS}x{KEYS_PER_LAYER}) — the [6,9] stream was "
+            "likely truncated. Re-run dump; nothing was changed."
+        )
 
 
 def _keymap_fragment(layers: list[list[str]]) -> dict:
@@ -46,9 +64,16 @@ def _keymap_fragment(layers: list[list[str]]) -> dict:
 
 
 def _resolve_device(port: str | None) -> DeviceInfo | None:
-    """The target device: the named port, else the first auto-detected board."""
+    """The target device: the named port, else the first auto-detected board.
+
+    An explicit port is filtered by `is_cyberboard` just like auto-detect — a
+    dongle or other serial responder answers `probe()` with a DeviceInfo whose
+    flag is False, and sending [6,9] to it would yield garbage layers we'd
+    mislabel as a live keymap. Reject it so dump falls back to the stored copy.
+    """
     if port is not None:
-        return probe(port, full=True)
+        device = probe(port, full=True)
+        return device if device is not None and device.is_cyberboard else None
     boards = [d for d in list_devices(full=True) if d.is_cyberboard]
     return boards[0] if boards else None
 
@@ -90,7 +115,9 @@ def dump_ir(device: DeviceInfo | None, *, stored_pid: str | None) -> tuple[dict,
 
     # --- keymap half: live read off the device, else the stored copy ---
     if device is not None:
-        keymap = _keymap_fragment(read_keymap(device.port))
+        layers = read_keymap(device.port)
+        _require_full_keymap(layers)
+        keymap = _keymap_fragment(layers)
         keymap_prov = "live"
         version = device.version
         cb_store.record_seen(product_id, version=version)
