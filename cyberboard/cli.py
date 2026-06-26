@@ -58,6 +58,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "set-time": ("cb_settime", [], "set the device RTC clock"),
     "store": ("cb_store", [], "where per-device configs are saved (path / --selftest)"),
     "dump": ("cb_dump", [], "dump current config (live keymap + stored LED) to a file/stdout"),
+    "diff": ("cb_diff", [], "diff two configs (snapshot refs or files): keymap + LED frame counts"),
 }
 
 # Meta commands handled by the dispatcher itself (not a cb_* tool).

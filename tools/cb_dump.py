@@ -84,18 +84,9 @@ def _file_ts(path: Path) -> str:
     return stamp.isoformat(timespec="seconds")
 
 
-def _stored_product_id() -> str | None:
-    """The sole stored device key, or None when there are zero or several.
-
-    Single-device is the supported case (the R4 has no per-unit identity), so an
-    offline dump can unambiguously target the one device dir if exactly one
-    exists; we refuse to guess between several.
-    """
-    devices = cb_store.store_root() / "devices"
-    if not devices.is_dir():
-        return None
-    keys = [d.name for d in devices.iterdir() if d.is_dir()]
-    return keys[0] if len(keys) == 1 else None
+# Sole-device resolution lives in cb_store (shared with `diff`); aliased here so
+# the call site reads in dump's own vocabulary.
+_stored_product_id = cb_store.sole_device
 
 
 def dump_ir(device: DeviceInfo | None, *, stored_pid: str | None) -> tuple[dict, dict]:
