@@ -59,6 +59,21 @@ def edit_key(ir: dict, layer: int, pos: str, value: str) -> tuple[dict, int, str
     return new_ir, idx, row[idx], new_code
 
 
+def _keymap_matches(readback: list[list[str]], key_layer: dict) -> bool:
+    """True iff the read-back keymap equals key_layer's layers (case-normalized).
+
+    Compares every layer, not just the edited cell — a partial/corrupt write can
+    leave the target key right while other keys land wrong. A truncated [6,9]
+    read yields short/missing layers, which simply fail the equality (never an
+    IndexError). Both sides are upper-cased (read_keymap emits uppercase; stored
+    codes may not), mirroring cb_read's --compare normalization.
+    """
+    want = [[c.upper() for c in (layer.get("layer") or [])]
+            for layer in (key_layer.get("layer_data") or [])]
+    got = [[c.upper() for c in layer] for layer in readback]
+    return got == want
+
+
 def _print_plan(fp, label: str) -> list[int]:
     """Print the frame plan and return the indices of any malformed frames."""
     import cb_write
@@ -94,6 +109,15 @@ def _cmd_key(args) -> int:
     pid = prov["product_id"]
 
     outgoing = {k: v for k, v in gathered.items() if k != "_provenance"}
+    # A full write must carry the LED (page_data) too, but LED can't be read
+    # back — so without a stored full IR there is no baseline to preserve, and
+    # planning a write from a keymap-only IR would crash on page_data (even a
+    # dry run). Fail cleanly first.
+    if prov["led"] == "unknown" or "page_data" not in outgoing:
+        print(f"set key: no stored full config for {pid} — LED can't be read back, so a full "
+              "write needs a saved baseline. Run `cyberboard dump` or a write first.",
+              file=sys.stderr)
+        return 1
     try:
         new_ir, idx, old_code, new_code = edit_key(outgoing, args.layer, args.pos, args.value)
     except (KeyError, ValueError) as e:
@@ -121,6 +145,17 @@ def _cmd_key(args) -> int:
         return 1
     port = device.port
 
+    # Re-probe right before the destructive write. dump_ir read the live keymap
+    # earlier, but the device could be unplugged or the serial node reused since;
+    # JSON_START erases config flash *first*, so a swapped-in board would be
+    # clobbered before the post-write probe could notice. Verify identity now and
+    # refuse if the port is no longer the expected board.
+    before = cb_write.probe(port, full=True)
+    if not (before and before.is_cyberboard and before.product_id == pid):
+        found = before.product_id if (before and before.is_cyberboard) else "no CyberBoard"
+        print(f"refusing to write: {port} now has {found}, not {pid}.", file=sys.stderr)
+        return 1
+
     # Persist the before-image *now*, before the write. JSON_START erases the
     # whole config flash, so a write that fails partway leaves the device bad;
     # `outgoing` (live keymap + stored LED) exists nowhere else and is the only
@@ -147,15 +182,17 @@ def _cmd_key(args) -> int:
               file=sys.stderr)
         return 1
 
-    # Confirm the edit actually landed via the [6,9] read-back (the only readable
-    # half). LED can't be read back, so this verifies the part we can.
+    # Confirm the write landed via the [6,9] read-back — the only readable half
+    # (LED can't be read back). Compare the *whole* keymap, not just the edited
+    # cell: a partial/corrupt write could leave the target right yet other keys
+    # wrong, and a truncated read fails the match instead of crashing.
     readback = cb_read.read_keymap(port)
-    got = readback[args.layer - 1][idx] if args.layer - 1 < len(readback) else None
-    if got != new_code:
-        print(f"read-back mismatch: layer {args.layer} idx {idx} is {got}, expected {new_code}; "
-              "not recording current.", file=sys.stderr)
+    if not _keymap_matches(readback, new_ir["key_layer"]):
+        print("read-back keymap does not match what we wrote; not recording current.",
+              file=sys.stderr)
         return 1
-    print(f"read-back OK: layer {args.layer} idx {idx} = {keycode.code_to_name(new_code)}")
+    print(f"read-back OK: full keymap matches (layer {args.layer} idx {idx} = "
+          f"{keycode.code_to_name(new_code)})")
 
     # Point current.json at what we wrote (current must equal the last full IR we
     # wrote, or dump / diff report a stale LED), then snapshot the new state so
