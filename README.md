@@ -99,7 +99,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `compose` | Compose a `led.toml` manifest (multi-source slots) → IR |
 | `read` | Read config back from the device (`keymap`) |
 | `keymap` | Keyboard-shaped keymap grid, colored by key category with compact ⌘⌥⌃⇧ / arrow symbols — `show` (ASCII, color on a TTY), or `edit` (interactive TUI, click a key to reassign; needs `[tui]`) |
-| `write` | Write an IR config to the device |
+| `write` | Write an IR config to the device. On a successful `--execute`, saves the written full IR to the state store (`current.json` + a snapshot) so `dump` / `history` / `restore` have a source of truth |
 | `set-time` | Set the device RTC clock |
 | `store` | Where per-device configs are saved (`path` shows the resolved root; `--selftest`) |
 | `get` | Show the current config in the terminal — live keymap grid (per layer) + stored LED frame counts, labelled by provenance (`--layer N` / `--all-layers`) |

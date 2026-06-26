@@ -135,6 +135,14 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   - ⚠ **LED は読み戻せない** → `--execute` の検証は **keymap 半分が無傷であることだけ**(`set key` と同じ
     `[6,9]` 全 keymap 一致)。LED 自体は目視確認(`_finish` が「check the display」を明示)。
   - ⚠ 実機 `--execute` は未検証(M1 write 経路は実証済み、本コマンド経由は要実機)。
+- **`write` の state store 配線(🟢 実装済み, issue #58, `cb_write.py`)**: `cyberboard write cfg.json
+  --execute` が成功したら、書いたフル IR を state store へ永続化する(`_record_write`)。**`write` こそが
+  `current.json` を正しく満たせる唯一の自然な経路** — LED は読み戻せないので最後に書いた IR だけが LED の
+  真実、これが無いと書込直後に `dump` しても `LED=unknown` になり #48 dump / #50 history / #51 restore が
+  実利用で噛み合わない。after-probe の `product_id` を store キーに `cb_store.snapshot` →（順次・入れ子に
+  しない)`save_current(version=after.version)`。`_provenance`(`dump` 由来)は除去して current を clean な
+  full IR に保つ。**dry-run は保存しない** / **ACK 失敗・device 不一致は保存しない**(current が嘘になるのを
+  防ぐ)/ **store 書込失敗は実機書込の成否を隠さない**(write は成功扱い・保存失敗は警告)。
 
 ## 独自スキーマ案
 

@@ -49,6 +49,7 @@ LAYER_CHUNK: Final = 60     # key_layer bytes per [6,7] frame
 WORD_PER_FRAME: Final = 28  # unicode chars per [3,1] frame (28*2 = 56B)
 PAGES_PER_CONTROL: Final = 4  # page_control entries per [2,2] frame
 WRITE_DELAY: Final = 0.005  # GlobalInfo.com_write_delay
+SETTLE_SECONDS: Final = 2.0  # flash-commit settle before the post-write probe (matches cb_set/cb_restore)
 _PAYLOAD_MAX: Final = 61  # bytes [2:63]
 
 
@@ -270,6 +271,72 @@ def write_config(port: str, frames: tuple[bytes, ...], *, timeout: float = 10.0)
         ser.close()
 
 
+def _record_write(product_id: str, config: dict, version: str | None) -> None:
+    """Persist the just-written full IR to the state store (snapshot + current).
+
+    `cyberboard write --execute` is the natural source of truth for `current.json`:
+    LED frames can't be read back, so the last full IR we wrote is the only record
+    of the device's LED state — without this, `dump`'s LED=last-written hybrid never
+    works in a normal workflow (a dump right after a write would report LED=unknown).
+
+    The device write already succeeded (and is irreversible) by the time we get here,
+    so a store failure must NEVER mask it or change the exit code — every store-side
+    error degrades to a warning. Each catch is deliberately broad (not just `OSError`):
+    after the ACK, the store can still raise `ValueError` (e.g. an invalid
+    `CYBERBOARD_HISTORY_MAX`) or `TypeError` (a non-serializable IR), and tracebacking
+    past a successful destructive write would be the worst outcome. `current.json` (the
+    LED source of truth) is saved in its OWN block, attempted FIRST and independent of
+    the history snapshot — a snapshot-retention failure must not leave current stale.
+    The two are separate sequential locked steps anyway — never nested (cb_store's flock
+    is per-fd; nesting would self-deadlock). `_provenance` (added by `dump`) is stripped
+    so `current.json` stays a clean full IR.
+    """
+    import cb_store
+
+    ir = {k: v for k, v in config.items() if k != "_provenance"}
+    try:
+        cb_store.save_current(product_id, ir, version=version)
+        print("state store: current.json updated")
+    except Exception as e:  # noqa: BLE001 — post-successful-write, must not traceback
+        print(f"warning: wrote the device but could not update current.json ({e}); "
+              "it may be stale.", file=sys.stderr)
+    try:
+        snap = cb_store.snapshot(product_id, ir)
+        print(f"state store: history snapshot {snap.stem}")
+    except Exception as e:  # noqa: BLE001 — history is best-effort; current already saved
+        print(f"warning: wrote the device but could not write a history snapshot ({e}).",
+              file=sys.stderr)
+
+
+def _keymap_verified(port: str, config: dict) -> bool:
+    """Whether the device's [6,9] keymap read-back matches the config we wrote.
+
+    An ACK doesn't prove the config landed (rule 30 §5a: ACK != correctness), so before
+    recording current.json we confirm via the one half the firmware can read back — the
+    keymap (LED frames can't be read back). Returns True when the read-back matches, or
+    when there's no keymap to compare (an LED-only config — trust the ACK as we must for
+    LED). Returns False (after a specific warning) on a mismatch or if the read-back
+    itself fails, so the caller skips recording rather than store a config the device
+    does not actually have.
+    """
+    import cb_read
+
+    want = [[c.upper() for c in (layer.get("layer") or [])]
+            for layer in ((config.get("key_layer") or {}).get("layer_data") or [])]
+    if not want:
+        return True  # nothing readable to verify (LED-only) — trust the ACK
+    try:
+        got = [[c.upper() for c in layer] for layer in cb_read.read_keymap(port)]
+    except (ValueError, OSError) as e:
+        print(f"warning: keymap read-back failed ({e}); not recording current.", file=sys.stderr)
+        return False
+    if got != want:
+        print("warning: post-write keymap read-back didn't match the config; "
+              "not recording current.", file=sys.stderr)
+        return False
+    return True
+
+
 def _resolve_port(arg: str | None) -> str | None:
     if arg is not None:
         return arg
@@ -324,10 +391,28 @@ def main() -> int:
     print(f"JSON_END reply ({len(reply)}B, crc {crc}): {reply.hex()}")
     print(f"ACK (byte[2]==1): {ok} -> {'SUCCESS' if ok else 'FAILED'}")
 
-    time.sleep(0.5)
+    # The device can still be committing flash right after the ACK, so wait the same
+    # settle as cb_set/cb_restore before probing: a too-early probe could miss `after`
+    # and wrongly skip the current.json/snapshot record for a write that did succeed.
+    time.sleep(SETTLE_SECONDS)
     after = probe(port, full=True)
     print(f"after:  {after.product_id if after else 'NO RESPONSE'} / {after.version if after else '?'}")
-    return 0 if ok and after and after.is_cyberboard else 1
+    success = bool(ok and after and after.is_cyberboard)
+    # Persist only a confirmed write to the *same* board. A non-ACK or a non-CyberBoard
+    # afterward means current.json would be a lie; and if the board probed after differs
+    # from the one probed before (serial node reused / board swapped between ACK and
+    # probe), recording under after.product_id would mismark a different board's config.
+    swapped = bool(before and after and before.product_id != after.product_id)
+    if success and swapped:
+        print("warning: board changed between the before/after probe; not recording current.",
+              file=sys.stderr)
+    # An ACK doesn't prove the config landed (rule 30 §5a: ACK != correctness). The keymap
+    # half is read-back-able, so confirm it matches before recording — exactly what
+    # cb_set/_finish does — to avoid storing a config the device doesn't actually have
+    # (which would poison dump/history/restore). _keymap_verified warns on mismatch.
+    elif success and _keymap_verified(port, config):
+        _record_write(after.product_id, config, after.version)
+    return 0 if success else 1
 
 
 if __name__ == "__main__":
