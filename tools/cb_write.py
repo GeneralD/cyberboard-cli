@@ -49,6 +49,7 @@ LAYER_CHUNK: Final = 60     # key_layer bytes per [6,7] frame
 WORD_PER_FRAME: Final = 28  # unicode chars per [3,1] frame (28*2 = 56B)
 PAGES_PER_CONTROL: Final = 4  # page_control entries per [2,2] frame
 WRITE_DELAY: Final = 0.005  # GlobalInfo.com_write_delay
+SETTLE_SECONDS: Final = 2.0  # flash-commit settle before the post-write probe (matches cb_set/cb_restore)
 _PAYLOAD_MAX: Final = 61  # bytes [2:63]
 
 
@@ -278,11 +279,15 @@ def _record_write(product_id: str, config: dict, version: str | None) -> None:
     of the device's LED state — without this, `dump`'s LED=last-written hybrid never
     works in a normal workflow (a dump right after a write would report LED=unknown).
 
-    The device write already succeeded by the time we get here; a store failure must
-    NOT mask that, so any error is a warning, never a non-zero exit. snapshot then
-    save_current are sequential locked steps — never nested (cb_store's flock is
-    per-fd; nesting would self-deadlock). `_provenance` (added by `dump`) is stripped
-    so `current.json` stays a clean full IR.
+    The device write already succeeded (and is irreversible) by the time we get here,
+    so a store failure must NEVER mask that or change the exit code — every store-side
+    error degrades to a warning. The catch is deliberately broad (not just `OSError`):
+    after the ACK, `cb_store.snapshot` / `save_current` can still raise `ValueError`
+    (e.g. an invalid `CYBERBOARD_HISTORY_MAX`) or `TypeError` (a non-serializable IR),
+    and tracebacking past a successful destructive write would be the worst outcome.
+    snapshot then save_current are sequential locked steps — never nested (cb_store's
+    flock is per-fd; nesting would self-deadlock). `_provenance` (added by `dump`) is
+    stripped so `current.json` stays a clean full IR.
     """
     import cb_store
 
@@ -291,7 +296,7 @@ def _record_write(product_id: str, config: dict, version: str | None) -> None:
         snap = cb_store.snapshot(product_id, ir)
         cb_store.save_current(product_id, ir, version=version)
         print(f"state store: current.json updated; snapshot {snap.stem}")
-    except OSError as e:
+    except Exception as e:  # noqa: BLE001 — post-successful-write, must not traceback
         print(f"warning: wrote the device but could not update the state store ({e}); "
               "current.json may be stale.", file=sys.stderr)
 
@@ -350,13 +355,22 @@ def main() -> int:
     print(f"JSON_END reply ({len(reply)}B, crc {crc}): {reply.hex()}")
     print(f"ACK (byte[2]==1): {ok} -> {'SUCCESS' if ok else 'FAILED'}")
 
-    time.sleep(0.5)
+    # The device can still be committing flash right after the ACK, so wait the same
+    # settle as cb_set/cb_restore before probing: a too-early probe could miss `after`
+    # and wrongly skip the current.json/snapshot record for a write that did succeed.
+    time.sleep(SETTLE_SECONDS)
     after = probe(port, full=True)
     print(f"after:  {after.product_id if after else 'NO RESPONSE'} / {after.version if after else '?'}")
     success = bool(ok and after and after.is_cyberboard)
-    # Record only a confirmed write: a non-ACK or a device that isn't the expected
-    # CyberBoard afterward means current.json would be a lie, so don't persist it.
-    if success:
+    # Persist only a confirmed write to the *same* board. A non-ACK or a non-CyberBoard
+    # afterward means current.json would be a lie; and if the board probed after differs
+    # from the one probed before (serial node reused / board swapped between ACK and
+    # probe), recording under after.product_id would mismark a different board's config.
+    swapped = bool(before and after and before.product_id != after.product_id)
+    if success and swapped:
+        print("warning: board changed between the before/after probe; not recording current.",
+              file=sys.stderr)
+    elif success:
         _record_write(after.product_id, config, after.version)
     return 0 if success else 1
 
