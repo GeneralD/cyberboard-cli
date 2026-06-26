@@ -165,7 +165,17 @@ def _cmd_key(args) -> int:
     print(f"snapshot (before): {before_snap.stem}")
     print(f"writing {fp.total} frames (~{fp.total * cb_write.WRITE_DELAY:.0f}s minimum)...")
 
-    ok, reply = cb_write.write_config(port, fp.frames)
+    # A serial error mid-transfer (unplugged / port reset) makes write_config
+    # raise instead of returning (False, reply). That happens *after* JSON_START
+    # may have erased flash, so treat it exactly like a non-ACK: surface the
+    # recovery guidance (before-snapshot is already persisted) rather than
+    # tracebacking past it. (SerialException subclasses OSError.)
+    try:
+        ok, reply = cb_write.write_config(port, fp.frames)
+    except OSError as e:
+        print(f"write failed mid-transfer ({e}); before-snapshot kept for recovery, "
+              "current.json unchanged.", file=sys.stderr)
+        return 1
     crc = "ok" if cb_write.crc_ok(reply) else "bad/none"
     print(f"JSON_END reply ({len(reply)}B, crc {crc}): {reply.hex()}")
     print(f"ACK (byte[2]==1): {ok} -> {'SUCCESS' if ok else 'FAILED'}")
