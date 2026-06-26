@@ -91,11 +91,14 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
 - **`restore`(🟢 実装済み, issue #51, `cb_restore.py`)**: `cyberboard restore <ref> [PORT] [--device CB04]
   [--execute]`。`<ref>` = `latest` or snapshot stem/prefix(`resolve_snapshot`: latest=最新、stem 完全一致 or
   先頭一致、曖昧=ValueError)。部分書込非対応ゆえ「巻き戻し」= 過去スナップの**フル書込**。`cb_write` に委譲し
-  **既定 dry-run**(frame plan 表示)、`--execute` で実書込。書込後 **settle ~2s** → 再 probe。ACK 失敗 /
-  書込後 device 無応答なら**スナップを記録しない**(exit 1)。**成功時**は巻き戻し自体を `cb_store.snapshot`
-  で新スナップ + `save_current` で current.json 更新(= 巻き戻しも履歴に残り、`dump`/`diff current` が
-  stale な LED を報告しない)。snapshot→save_current は**順次**(flock per-fd ゆえ入れ子不可)。pure stdlib の
-  解決 + dry-run(device 不要)。⚠ **実機 `--execute` は未検証**(M1 write 経路は実証済み、本コマンド経由は要実機)。
+  **既定 dry-run**(frame plan 表示)、`--execute` で実書込。**書込前に probe の product_id が `pid` と
+  一致するか検証**(不一致なら別機への誤書込を拒否=exit 1)。書込後 **settle ~2s** → 再 probe(同様に
+  product_id 一致を要求)。ACK 失敗 / device 不一致なら**スナップを記録しない**(exit 1)。**成功時**は
+  **置換した(outgoing)config を `cb_store.snapshot` で新スナップ**(復元する IR は既に履歴にあり、
+  outgoing は current.json にしか無いことがある → これを保存すると `restore latest` で巻き戻しを巻き戻せる)
+  - `save_current` で current.json 更新(`dump`/`diff current` が stale な LED を報告しない)。snapshot→
+  save_current は**順次**(flock per-fd ゆえ入れ子不可)。pure stdlib の解決 + dry-run(device 不要)。
+  ⚠ **実機 `--execute` は未検証**(M1 write 経路は実証済み、本コマンド経由は要実機)。
 - これを叩く `get` / `set key` / `set led` は epic #45 の残 issue(#52-#54)で実装。
 
 ## 独自スキーマ案

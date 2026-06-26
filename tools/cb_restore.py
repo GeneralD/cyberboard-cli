@@ -9,9 +9,10 @@ through cb_write.
 
 Like cb_write it is **dry-run by default** (prints the frame plan); pass
 `--execute` to actually write. After a successful write it waits ~2s for the
-device to settle, then records the restore itself as a new snapshot and refreshes
-current.json — so the rollback is in history too (you can roll back a rollback),
-and `dump`/`diff current` keep telling the truth about what's on the device.
+device to settle, then preserves the *replaced* config as a new snapshot and
+points current.json at what it wrote — so the rollback is reversible (`restore
+latest` undoes it) and `dump`/`diff current` keep telling the truth about what's
+on the device.
 
 Snapshot resolution is pure stdlib; the actual write pulls in pyserial via
 cb_write, so a dry-run still works without a device attached.
@@ -116,9 +117,21 @@ def main() -> int:
         print("No CyberBoard found.", file=sys.stderr)
         return 1
 
+    # Capture the config we're about to replace BEFORE writing, so the rollback
+    # is itself reversible (snapshotted on success below).
+    outgoing = cb_store.load_current(pid)
+
     before = cb_write.probe(port, full=True)
     print(f"\nport: {port}")
     print(f"before: {before.product_id if before else '?'} / {before.version if before else '?'}")
+    # Refuse to clobber a different keyboard: the probed device must be a
+    # CyberBoard whose product_id is the one we're restoring (and recording
+    # under). A wrong PORT, or an auto-detected sibling, would otherwise be
+    # overwritten with this device's snapshot and mislabelled in the store.
+    if not (before and before.is_cyberboard and before.product_id == pid):
+        found = before.product_id if (before and before.is_cyberboard) else "no CyberBoard"
+        print(f"refusing to write: {port} has {found}, not {pid}.", file=sys.stderr)
+        return 1
     print(f"writing {fp.total} frames (~{fp.total * cb_write.WRITE_DELAY:.0f}s minimum)...")
 
     ok, reply = cb_write.write_config(port, fp.frames)
@@ -132,18 +145,22 @@ def main() -> int:
     time.sleep(SETTLE_SECONDS)
     after = cb_write.probe(port, full=True)
     print(f"after:  {after.product_id if after else 'NO RESPONSE'} / {after.version if after else '?'}")
-    if not (after and after.is_cyberboard):
-        print("device not responding after write; not recording a snapshot.", file=sys.stderr)
+    if not (after and after.is_cyberboard and after.product_id == pid):
+        print("device not the expected CyberBoard after write; not recording.", file=sys.stderr)
         return 1
 
-    # The rollback is itself a write, so record it as a fresh snapshot AND as the
-    # current HEAD (current.json must equal the last full IR we wrote, or dump /
-    # diff would report a stale LED — the firmware can't read LED back). Two
-    # sequential locked steps: cb_store's flock is per-fd, so nesting them in one
-    # process would self-deadlock (cb_store.snapshot docstring).
-    new_snap = cb_store.snapshot(pid, ir)
+    # Record the rollback so it stays reversible. Snapshot the config we just
+    # *replaced* (the outgoing current), not the one we restored: the restored IR
+    # is already in history, whereas the outgoing one might live only in
+    # current.json — preserving it makes `restore latest` undo this rollback.
+    # Then point current.json at what we actually wrote (current must equal the
+    # last full IR we wrote, or dump / diff report a stale LED — LED can't be read
+    # back). snapshot then save_current are two sequential locked steps:
+    # cb_store's flock is per-fd, so nesting them would self-deadlock.
+    if outgoing is not None:
+        snap = cb_store.snapshot(pid, outgoing)
+        print(f"preserved pre-restore config as snapshot {snap.stem}")
     cb_store.save_current(pid, ir, version=after.version)
-    print(f"recorded restore as snapshot {new_snap.stem}")
     return 0
 
 
