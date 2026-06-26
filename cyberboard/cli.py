@@ -62,7 +62,7 @@ COMMANDS: dict[str, tuple[str, list[str], str]] = {
     "diff": ("cb_diff", [], "diff two configs (snapshot refs or files): keymap + LED frame counts"),
     "history": ("cb_history", [], "list a device's saved snapshots (newest first)"),
     "restore": ("cb_restore", [], "re-write a past snapshot to the device (undo; dry-run by default)"),
-    "set": ("cb_set", [], "edit one setting in place: set key <layer> <pos> <val> (dry-run by default)"),
+    "set": ("cb_set", [], "edit one setting in place: set key <layer> <pos> <val> / set led <slot> <gif|recipe> (dry-run by default)"),
 }
 
 # Meta commands handled by the dispatcher itself (not a cb_* tool).
@@ -76,7 +76,7 @@ SUBCOMMANDS: dict[str, list[str]] = {
     "led": ["gif2ir", "ir2gif", "play", "recipe"],
     "anim": ["render", "preview", "montage"],
     "store": ["path"],
-    "set": ["key"],
+    "set": ["key", "led"],
     "completion": ["bash", "zsh", "fish"],
 }
 

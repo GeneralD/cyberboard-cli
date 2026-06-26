@@ -108,6 +108,7 @@ uv run --extra led cyberboard --help   # device commands don't need --extra led
 | `history` | List a device's saved snapshots (newest first) with size + provenance — the refs `diff` / `restore` accept |
 | `restore` | Re-write a past snapshot to the device — undo/rollback (`restore <ref>`, `<ref>` = `latest` or a timestamp; dry-run unless `--execute`) |
 | `set key` | Reassign one key in place — read live keymap, swap one position, keep stored LED, full-write (`set key <layer> <pos> <val>`; dry-run unless `--execute`). Auto-snapshots before & after |
+| `set led` | Replace one display slot's frames from a GIF or recipe — keep the live keymap, full-write (`set led <slot> <gif\|recipe>`; dry-run unless `--execute`). Auto-snapshots before & after |
 | `completion` | Print a shell completion script (`bash` / `zsh` / `fish`) |
 
 ```sh

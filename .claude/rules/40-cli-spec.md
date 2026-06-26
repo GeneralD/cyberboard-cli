@@ -120,7 +120,21 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   - device-match: gather がライブ keymap を読んだ device(`device.product_id == pid`)へ書く。`--execute` は
     device 接続 + `keymap=live` を要求(stale な stored を書かない)。書込後 probe で再度 CyberBoard/pid を確認。
   - ⚠ 実機 `--execute` は未検証(M1 write 経路は実証済み、本コマンド経由は要実機)。
-- これを叩く `set led` は epic #45 の残 issue(#54)で実装。
+- **`set led`(🟢 実装済み, issue #54, `cb_set.py`)**: `cyberboard set led <slot> <gif|recipe> [PORT]
+  [--device CB04] [--kind gif|recipe] [--resample nearest|lanczos|box] [--speed-ms N] [--lightness N]
+  [--execute]`。1 ディスプレイスロット(1/2/3 = page 5/6/7)の display `frames` だけを read→merge→full-write で
+  差し替える。`set key` と**書込/スナップ/検証の尾部を完全共有**(`_gather`/`_finish` に抽出): gather は
+  同じ `cb_dump.dump_ir`(device 接続時=ライブ keymap / offline=stored、LED は current.json から合成)、
+  書込・before/after 2 スナップ・device-match・settle ~2s・`[6,9]` 読戻し検証も同一。
+  - **ソース** = GIF(`.gif`)or cb_anim レシピ(`.json`)。`--kind` で強制可(既定は拡張子判定)。フレーム生成は
+    **既存コーデックを再利用**: gif=`cb_led._gif_frames`(40×5 ダウンサンプル、`--resample`)、recipe=
+    `cb_anim._render_recipe`(エフェクト展開、256 cap)→ `cb_led.frames_to_page`(slot patch + frame_index 振り直し +
+    **per-key `keyframes` は base 維持**)。`speed_ms` は GIF duration / レシピ既定(`--speed-ms` で上書き)。
+  - 純粋ロジック `edit_led(ir, slot, source, *, kind, resample, speed_ms, lightness) → (new_ir, page_index,
+    n_frames, speed_ms)` は serial 不要で単体テスト可。**既定 dry-run**(frame plan + ソース/フレーム数 1 行)。
+  - ⚠ **LED は読み戻せない** → `--execute` の検証は **keymap 半分が無傷であることだけ**(`set key` と同じ
+    `[6,9]` 全 keymap 一致)。LED 自体は目視確認(`_finish` が「check the display」を明示)。
+  - ⚠ 実機 `--execute` は未検証(M1 write 経路は実証済み、本コマンド経由は要実機)。
 
 ## 独自スキーマ案
 
@@ -349,6 +363,7 @@ ambctl read   -o dump.json     # デバイス→IR 読み戻し(cmd_get_* 利用
 ambctl diff   dump.json config.json   # 書き込み前後の差分確認
 cyberboard get [PORT] [--layer N | --all-layers]  # 現在値を端末表示(keymap=ライブ・グリッド / LED=stored・frame 数)
 cyberboard set key <layer> <pos> <val> [PORT] [--device CB04] [--execute]  # 1キーを read→merge→write(既定 dry-run・before/after 自動スナップ)
+cyberboard set led <slot> <gif|recipe> [PORT] [--device CB04] [--kind gif|recipe] [--speed-ms N] [--execute]  # 1スロットの display frames を GIF/recipe で差し替え(read→merge→write、keymap 維持・自動スナップ)
 cyberboard keymap show [CONFIG] [--layer N] [--corners round|square] [--color auto|always|never]  # keymap をキーボード型 ASCII グリッドで表示(カテゴリ別カラー + ⌘⌥⌃⇧/矢印 記号)
 cyberboard keymap edit CONFIG [--layer N] [--corners round|square] [-o OUT]  # 対話的 TUI でキーをクリック→再割当(同じカラー表示・[tui] extra)
 ```
