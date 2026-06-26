@@ -105,7 +105,22 @@ LED の唯一の真実**= これを保持しないと「keymap だけ変更・LE
   `keymap show` と同じデコード)+ **LED slot ごとの display/per-key frame 数**。既定は layer 1(`--layer N` /
   `--all-layers`)。device offline は stored へ縮退(`keymap=stored@<ts>` 明示)、LED 未保存は clean に
   「(none stored)」、device も current も無ければ clean error(exit 1)。`record_seen` で観測も記録(dump 経由)。
-- これを叩く `set key` / `set led` は epic #45 の残 issue(#53-#54)で実装。
+- **`set key`(🟢 実装済み, issue #53, `cb_set.py`)**: `cyberboard set key <layer> <pos> <val> [PORT]
+  [--device CB04] [--execute]`。1 キーだけを read→merge→full-write で書き換える(部分書込不可ゆえ)。
+  gather は **`cb_dump.dump_ir` を再利用**(device 接続時=ライブ keymap / offline=stored、LED は current.json
+  から合成)。`<pos>` は `keymap_alias.resolve_position`(座標 `r{row}c{col}` or R4 別名)、`<val>` は
+  `keycode.name_to_code`(可読名 / 生 `#MMPPUUUU` / `.` クリア)で解決し、当該 layer の 1 セルだけ差替えて
+  完全 IR を生成。**既定 dry-run**(frame plan + 変更 1 行 `old→new` を表示)、`--execute` で実書込。
+  純粋ロジック `edit_key(ir, layer, pos, val) → (new_ir, idx, old, new)` は serial 不要で単体テスト可。
+  - **before/after の 2 スナップ**: 書込**前**に outgoing(ライブ keymap + stored LED)を `snapshot`
+    (JSON_START が flash 全消去 → 書込失敗時に device が壊れても、この組合せは他に存在しない唯一の復旧点。
+    成功時でなく書込前に永続)。書込成功 + settle ~2s 後に **`[6,9]` 読戻しで当該キー == 新コードを検証**し、
+    `save_current`(current=最後に書いた IR)+ 新 IR を `snapshot`(after)。snapshot と save_current は
+    flock per-fd ゆえ**入れ子にせず順次**。
+  - device-match: gather がライブ keymap を読んだ device(`device.product_id == pid`)へ書く。`--execute` は
+    device 接続 + `keymap=live` を要求(stale な stored を書かない)。書込後 probe で再度 CyberBoard/pid を確認。
+  - ⚠ 実機 `--execute` は未検証(M1 write 経路は実証済み、本コマンド経由は要実機)。
+- これを叩く `set led` は epic #45 の残 issue(#54)で実装。
 
 ## 独自スキーマ案
 
@@ -333,6 +348,7 @@ ambctl write  config.json [--section keymap|led|all] [--slot 1,2,3] [--dry-run]
 ambctl read   -o dump.json     # デバイス→IR 読み戻し(cmd_get_* 利用)
 ambctl diff   dump.json config.json   # 書き込み前後の差分確認
 cyberboard get [PORT] [--layer N | --all-layers]  # 現在値を端末表示(keymap=ライブ・グリッド / LED=stored・frame 数)
+cyberboard set key <layer> <pos> <val> [PORT] [--device CB04] [--execute]  # 1キーを read→merge→write(既定 dry-run・before/after 自動スナップ)
 cyberboard keymap show [CONFIG] [--layer N] [--corners round|square] [--color auto|always|never]  # keymap をキーボード型 ASCII グリッドで表示(カテゴリ別カラー + ⌘⌥⌃⇧/矢印 記号)
 cyberboard keymap edit CONFIG [--layer N] [--corners round|square] [-o OUT]  # 対話的 TUI でキーをクリック→再割当(同じカラー表示・[tui] extra)
 ```
