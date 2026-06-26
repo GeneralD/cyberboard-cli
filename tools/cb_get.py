@@ -117,6 +117,15 @@ def main() -> int:
         print(f"get: {e}", file=sys.stderr)
         return 1
 
+    # Validate an explicit --layer against the actual count BEFORE printing, so
+    # an invalid request fails non-zero (and prints nothing misleading) instead
+    # of looking successful to a script.
+    layer_count = len((ir.get("key_layer") or {}).get("layer_data", []))
+    if args.layer is not None and not (1 <= args.layer <= layer_count):
+        scope = f"1..{layer_count}" if layer_count else "this config has no keymap layers"
+        print(f"get: --layer {args.layer} out of range ({scope}).", file=sys.stderr)
+        return 1
+
     print("\n".join(_provenance_lines(prov)))
     print()
     print("\n".join(_keymap_lines(ir, _targets(args, ir))))
