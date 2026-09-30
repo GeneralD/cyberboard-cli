@@ -4,6 +4,61 @@
 
 ---
 
+## 2026-09-30 (続34) — 番外: AM INFINITY マウス(AM30)のブートローダー固定を AM Master 1.3.9 の隠しローカル更新で復旧
+
+CyberBoard とは別製品だが、**AM Master 1.3.9 の内部(AM30 = INFINITY マウス/ドングル系)を解析して実機復旧に成功**した
+知見。症状は「マウスが光るのにカーソルが動かない / AM Master でドングルしか出ず電池残量が空 / 有線で刺しても認識しない」。
+
+### 診断(USB 列挙が全て)🟢
+
++ 正常時の ID: マウス本体 `0x3151:0x402A` "AM INFINITY MOUSE"(HID: mouse/consumer/vendor 0xFFFF)、ドングル
+  `0x3151:0x5007` "AM INFINITY 8K MOUSE"。**ブートローダー**: マウス `0x402B` "USB Device Boot"(Vendor "AM"、
+  HID は usage page `0xFF01` の feature report 64B **1 本だけ**、serial ダミー `0123456789`)、ドングル `0x402E`。
++ 今回の個体は本体が **`0x402B` 固定**(刺し直し・ボタン同時押しでも脱出せず。3 ボタン押し込みで刺す=強制ブートローダーで
+  同じ `0x402B`、消灯はその挙動)。AM Master は `hid.enumerate(0x3151, 0x402A)` でしか本体を探さないため「未接続」扱い →
+  一覧に出ない・電池も読めない。**電池残量が出ない ≠ 未接続の証拠**(残量はリンク後にしか取れない)。
++ 診断コマンド: `hidutil list | grep 0x3151` / `ioreg -p IOUSB -l -w0`。AM Master のログは `~/AM_Master/logs/log_<date>.log`
+  (中国語 + AM30 の stage ログが詳細で、**ログを読めば失敗理由が全部書いてある**)。
+
+### AM Master 1.3.9 の中身(1.3.7 から大幅更新)🟢
+
++ **Python 3.11 + PySide6**、`~/Applications/AM_Master.app`。`pyinstxtractor` は **Python 3.11 で実行しないと PYZ が
+  展開されない**(`uv run --python 3.11 --no-project python pyinstxtractor.py <bin>`)。3.11 の pyc は pycdc が弱いので
+  **`marshal.load` + `dis` で co_consts/co_names を読む**方が確実(定数・文字列・分岐は十分読める)。
++ 新モジュール: `am30_service.pyc`(マウス/ドングル HID プロトコル + 更新)/ `firmware_service.pyc`(WorkerStation:
+  auto/local 更新のオーケストレーション)/ `device_registry.pyc` / `firmware_guard.pyc` / `am35_service.pyc`。
++ 更新 type: マウス = `usb`(USB MCU)/ `soc`(RF SoC)、ドングル = `d_usb`/`d_soc`/`d_led`。ステージ: firmware_ready →
+  (normal_hid_wait →)enter_boot → boot_hid_ready → transfer → verify(checksum = バイト総和 & 0xFFFFFFFF)→
+  normal_hid_reconnect → complete。**`usb_update` は normal HID が無ければ boot HID を探し、あれば `enter_boot` を飛ばして
+  転送する**(`source=existing_session`)= **既にブート固定の個体を焼ける実装が入っている**。
++ ターゲット解決 `get_am30_connected_targets` は **boot PID も接続として数える**(0x402B→mouse, 0x402E→dongle)。
+  `get_am30_active_target` は「片方だけ接続」なら自動確定、**両方接続で選択デバイス未登録だと `target is ambiguous` で中断**。
++ ファーム取得: `POST https://diy.angrymiao.com/api/firmware/check` に `{key, password}`(key = `AM_30_USB` / `AM_30_SOC` /
+  `AM_D_30_USB` / `AM_D_30_SOC` / `AM_D_30_LED`)→ `files[0].url`(aliyun OSS の `.bin`)。バージョン表は
+  `GET …/api/product-collection/mouse_version`(認証不要)。
++ **手動(ローカル)更新の入口 = UI の隠し機能**: ファーム画面で **バージョン番号の文字をクリック** → 6 桁パスワード
+  (`systemInfo.password`、既定 `135qwr`、配布 JS に平文)→ ネイティブのファイル選択 → `local_mouse_update`。
+  **ファイル検証は `basename.split('-')[0] == type` だけ**(例 `usb-V1.0.3.bin`。`am30-…` と改名すると弾かれる)。
++ web UI は `diy.angrymiao.com` の Vue SPA を QtWebEngine で読み、QWebChannel の `bridge`(`autoMouseUpdate` /
+  `localMouseUpdate` / `setCurrentDevice` …)で Python を呼ぶ。**`QTWEBENGINE_REMOTE_DEBUGGING=9222` で起動すると
+  CDP が開く**(アプリは禁止していない): `document.querySelector('#app').__vue__.$store.dispatch('loader/localMouseUpdate','usb')`
+  で、UI が出さない経路(マウスが一覧に無い時)でも純正のローカル更新を発火できる。
+
+### 復旧手順(実施済み・成功)🟢
+
+1. ドングルの Update(ドングル V0.0.0 → 1.6)。副作用で**無線リンクが回復**(旧ドングルファームが本体 SoC と噛み合って
+   いなかった)。⚠ Update ボタンは **1 回だけ**: 連打分がキューに積まれ同じ書換を 8 周した(各周は成功、害なし)。
+2. **ドングルを抜き**、ブート固定のマウスだけ USB 直結(接続候補 1 つ = target 自動確定)。
+3. `usb-V1.0.3.bin`(公式 OSS から取得)を用意し、CDP 経由で `localMouseUpdate('usb')` → ファイル選択 → 10 秒で
+   `boot_hid_ready source=existing_session` → verify OK → **`0x402A` に復帰**、一覧に mouse が出る。
+4. その後は正規手順: 左「マウス単体」カード → Update で `usb` + `soc`(304KB, 1.5 分)が完走。両方刺した状態で失敗する時は
+   ドングルを抜く(ambiguous 回避)。verify の 1 回目 checksum 不一致 → 自動リトライ成功は毎回出る癖(ドングルでも同じ)。
+
++ 一覧に「マウス単体」と「マウス+ドングル」が両方出るのは 1.3.9 の仕様(有線経路 `MOUSE` / 無線経路 `MOUSEDONGLE`)。
+  中央(ドングル側)から Update すると対象がドングルに解決されるので、本体更新は必ず単体カードから。
+
+---
+
 ## 2026-06-24 (続33) — keymap グリッドのカテゴリ別カラー + 修飾/矢印キー記号化(issue #37 完了)
 
 ユーザー issue #37「TUIでキー編集機能。カラフルに。変更したキーは着色。cmd, alt, ctrl, shift など名前が

@@ -80,3 +80,23 @@ API エンドポイント(アプリ内ハードコード):
 
 > 数値定数(VID/PID/baud/CRC/frame レイアウト)・制御フロー・送信順序まで取得済み。
 > 残りは**実機キャプチャでの裏取りのみ**(→ `30-write-protocol.md` §8)。
+
+## AM Master 1.3.9(2026-09-30 追記)— 1.3.7 との差分 🟢
+
+上記の解析は 1.3.7(Python 3.7 / PySide2)が対象。現行 1.3.9(`~/Applications/AM_Master.app`)は
+**Python 3.11 + PySide6** に更新され、マウス/ドングル系(AM30 = AM INFINITY)が別モジュールに分離された。
+詳細な手順・実機復旧は `90` 続34。
+
+- 展開: `pyinstxtractor` を **Python 3.11 で**実行(他版だと PYZ 未展開)。3.11 pyc は pycdc が弱いので
+  `marshal.load` + `dis`(co_consts / co_names)で読む。
+- 追加モジュール: `am30_service`(マウス/ドングル HID プロトコル・更新)、`firmware_service`(auto/local 更新の
+  WorkerStation)、`device_registry`、`firmware_guard`、`am35_service`。
+- AM30 の VID/PID: マウス `0x3151:0x402A`(boot `0x402B`)、ドングル `0x3151:0x5007`(boot `0x402E`)。
+  検出は `hid.enumerate` の通常 PID 固定 → **boot 固定の個体は UI に出ない**が、更新ロジック側は boot PID を
+  接続として扱い `existing_session` で焼ける。
+- 隠し機能: ファーム画面のバージョン文字クリック → 6 桁パスワード(既定 `135qwr`)→ ローカル `.bin` 更新
+  (ファイル名は `<type>-…bin` 必須)。`QTWEBENGINE_REMOTE_DEBUGGING=9222` で CDP が開き、Vue store の
+  `loader/localMouseUpdate` を直接 dispatch できる。
+- ログ: `~/AM_Master/logs/log_<date>.log`(AM30 更新は stage ごとに詳細出力。失敗理由はここを見る)。
+- CyberBoard 側(`KBSerialOption` / `TransJsonCmd` / `JsonToCmd` の CDC シリアル経路)は 1.3.9 でも健在で、
+  `30` のプロトコルはそのまま有効(`cb_doctor` HEALTHY を同日確認)。
