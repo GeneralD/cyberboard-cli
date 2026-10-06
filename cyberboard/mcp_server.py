@@ -23,10 +23,19 @@ from typing import Any
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError as exc:  # pragma: no cover - exercised only without the extra
-    # ImportError (not just ModuleNotFoundError) so an incompatible/old `mcp`
-    # without `FastMCP` still yields the install hint instead of a traceback.
+    # ImportError (not just ModuleNotFoundError) so an incompatible `mcp`
+    # (2.x renamed FastMCP -> MCPServer) is told apart from a missing one.
+    from importlib import metadata
+
+    try:
+        _found = metadata.version("mcp")
+    except metadata.PackageNotFoundError:
+        raise SystemExit(
+            "cyberboard-mcp needs the MCP SDK: pip install 'cyberboard-cli[mcp]'"
+        ) from exc
     raise SystemExit(
-        "cyberboard-mcp needs the MCP SDK: pip install 'cyberboard-cli[mcp]'"
+        f"cyberboard-mcp needs mcp>=1.2,<2 but found mcp {_found}, which has no "
+        "mcp.server.fastmcp.FastMCP: pip install 'mcp>=1.2,<2'"
     ) from exc
 
 mcp = FastMCP("cyberboard")
