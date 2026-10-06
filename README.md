@@ -165,14 +165,14 @@ Per client:
   ```json
   { "mcpServers": { "cyberboard": {
       "command": "uvx",
-      "args": ["--from", "cyberboard-cli[mcp]", "cyberboard-mcp"] } } }
+      "args": ["--from", "cyberboard-cli[mcp]", "--with", "mcp<2", "cyberboard-mcp"] } } }
   ```
 
 - **[mcpm](https://mcpm.sh) users** — register it once and add it to a profile:
 
   ```sh
   mcpm new cyberboard --type stdio --command uvx \
-    --args "--from cyberboard-cli[mcp] cyberboard-mcp"
+    --args "--from cyberboard-cli[mcp] --with mcp<2 cyberboard-mcp"
   mcpm profile edit base --add-server cyberboard
   ```
 
@@ -200,7 +200,7 @@ plugin marketplace and install the plugin:
 ```
 
 Enabling it starts the server automatically. The MCP entry **self-bootstraps**
-via `uvx --from 'cyberboard-cli[mcp,led]' cyberboard-mcp` — uvx fetches the
+via `uvx --from 'cyberboard-cli[mcp,led]' --with 'mcp<2' cyberboard-mcp` — uvx fetches the
 package on first launch (LED tools included, pillow from a wheel — no source
 build) and caches it thereafter.
 

@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "cyberboard-cli"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "pyserial" },
@@ -227,8 +227,8 @@ verify = [
 requires-dist = [
     { name = "jsonschema", marker = "extra == 'all'", specifier = ">=4.0" },
     { name = "jsonschema", marker = "extra == 'verify'", specifier = ">=4.0" },
-    { name = "mcp", marker = "extra == 'all'", specifier = ">=1.2" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.2" },
+    { name = "mcp", marker = "extra == 'all'", specifier = ">=1.2,<2" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.2,<2" },
     { name = "pillow", marker = "extra == 'all'", specifier = ">=10.0" },
     { name = "pillow", marker = "extra == 'led'", specifier = ">=10.0" },
     { name = "pyserial", specifier = ">=3.5" },

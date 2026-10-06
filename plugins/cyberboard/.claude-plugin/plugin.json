@@ -14,7 +14,7 @@
   "mcpServers": {
     "cyberboard": {
       "command": "uvx",
-      "args": ["--from", "cyberboard-cli[mcp,led]", "cyberboard-mcp"],
+      "args": ["--from", "cyberboard-cli[mcp,led]", "--with", "mcp<2", "cyberboard-mcp"],
       "env": {}
     }
   }
